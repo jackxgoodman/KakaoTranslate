@@ -1,97 +1,99 @@
 """
-Read Korean chat messages from a running KakaoTalk window using the
-Windows UI Automation accessibility tree — no OCR required.
+Read Korean chat messages from the KakaoTalk window via screenshot + OCR.
+
+KakaoTalk uses custom rendering that bypasses the Windows Accessibility API,
+so we capture the chat area as an image and run easyocr over it.
 """
 
 import logging
 from typing import List, Optional
 
-import uiautomation as auto
+import pygetwindow as gw
+from PIL import ImageGrab, Image
 
 from config import CHAT_NAME
 from translator import has_korean
 
 logger = logging.getLogger(__name__)
 
-_KAKAO_TITLES = {'KakaoTalk', '카카오톡'}
+_KAKAO_TITLES = ('KakaoTalk', '카카오톡')
 
 
-def _find_kakao_window() -> Optional[auto.Control]:
-    """Return the KakaoTalk window that shows the group chat."""
-    root = auto.GetRootControl()
-    try:
-        children = root.GetChildren()
-    except Exception:
-        return None
-
-    # Prefer a standalone pop-out window whose title matches the chat name
-    if CHAT_NAME:
-        for w in children:
-            try:
-                if CHAT_NAME in (w.Name or ''):
-                    return w
-            except Exception:
-                pass
-
-    # Fall back to the main KakaoTalk window
-    for w in children:
-        try:
-            if (w.Name or '') in _KAKAO_TITLES:
-                return w
-        except Exception:
-            pass
-
-    return None
-
-
-def _collect_korean(control: auto.Control, results: List[str], depth: int = 0) -> None:
-    """Recursively walk the UI tree and collect strings that contain Korean."""
-    if depth > 25:
-        return
-    try:
-        name = (control.Name or '').strip()
-        if name and has_korean(name):
-            results.append(name)
-    except Exception:
-        pass
-    try:
-        for child in control.GetChildren():
-            _collect_korean(child, results, depth + 1)
-    except Exception:
-        pass
+def _load_reader():
+    import easyocr
+    logger.info("Loading OCR model — first run downloads ~1.5 GB, please wait…")
+    return easyocr.Reader(['ko', 'en'], gpu=False)
 
 
 class ChatMonitor:
     def __init__(self) -> None:
+        self._reader = None  # lazy-loaded on first scan
         self._seen: set = set()
         self._seeded: bool = False
 
+    @property
+    def reader(self):
+        if self._reader is None:
+            self._reader = _load_reader()
+        return self._reader
+
+    def _find_chat_window(self):
+        """Find the KakaoTalk window that shows the group chat."""
+        # Prefer a pop-out window whose title contains the chat name
+        if CHAT_NAME:
+            wins = gw.getWindowsWithTitle(CHAT_NAME)
+            if wins:
+                return wins[0]
+        # Fall back to the main KakaoTalk window
+        for title in _KAKAO_TITLES:
+            wins = gw.getWindowsWithTitle(title)
+            if wins:
+                return wins[0]
+        return None
+
+    def _screenshot_chat(self, window) -> Optional[Image.Image]:
+        """Capture just the message area of the chat window."""
+        try:
+            left, top = window.left, window.top
+            w, h = window.width, window.height
+            title = window.title or ''
+            # Main KakaoTalk window has a left sidebar; pop-out chat windows don't
+            x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
+            # Crop out the header (~70 px) and the input box (~80 px)
+            bbox = (x1, top + 70, left + w, top + h - 80)
+            return ImageGrab.grab(bbox=bbox)
+        except Exception as e:
+            logger.warning(f"Screenshot failed: {e}")
+            return None
+
     def _get_visible_korean(self) -> List[str]:
-        window = _find_kakao_window()
+        window = self._find_chat_window()
         if not window:
-            if self._seeded:  # only warn after initial setup to avoid startup noise
-                logger.warning(
-                    f"KakaoTalk window not found. "
-                    f"Is KakaoTalk open with '{CHAT_NAME}'?"
-                )
+            if self._seeded:
+                logger.warning(f"KakaoTalk window not found — is '{CHAT_NAME}' open?")
             return []
 
-        raw: List[str] = []
-        _collect_korean(window, raw)
+        img = self._screenshot_chat(window)
+        if img is None:
+            return []
+
+        results = self.reader.readtext(img, detail=0, paragraph=False)
+        texts = [r.strip() for r in results if has_korean(r.strip())]
+
         # Deduplicate while preserving order
         seen_local: set = set()
         unique = []
-        for item in raw:
-            if item not in seen_local:
-                seen_local.add(item)
-                unique.append(item)
+        for t in texts:
+            if t not in seen_local:
+                seen_local.add(t)
+                unique.append(t)
         return unique
 
     def get_new_messages(self) -> List[str]:
         """
-        Return Korean messages that have appeared since the last call.
-        On the very first call, seeds the 'seen' set from current chat history
-        so that old messages are not translated on startup.
+        Return Korean messages that appeared since the last call.
+        On the very first call, seeds the seen-set from current chat history
+        so old messages are not translated on startup.
         """
         messages = self._get_visible_korean()
 
@@ -107,7 +109,6 @@ class ChatMonitor:
         new = [m for m in messages if m not in self._seen]
         self._seen.update(new)
 
-        # Trim the set to avoid unbounded memory growth
         if len(self._seen) > 2000:
             self._seen = set(list(self._seen)[-2000:])
 
