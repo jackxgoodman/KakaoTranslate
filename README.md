@@ -81,6 +81,20 @@ Stop it at any time with **Ctrl+C**.
 
 ---
 
+## Auto-start after reboot
+
+To have KakaoTranslate start automatically every time the computer boots, run the installer once:
+
+1. **Right-click `install_task.bat`** → **Run as administrator**
+2. Follow the on-screen prompt — it registers a Windows Task Scheduler entry that launches the script 60 seconds after login (giving KakaoTalk time to open first).
+3. Also enable KakaoTalk's own auto-start: **KakaoTalk → Settings → General → "Run KakaoTalk when Windows starts"**.
+
+Logs (including any errors) are written to `kakaotranslate.log` in the project folder.
+
+To remove auto-start: **right-click `uninstall_task.bat`** → **Run as administrator**.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |

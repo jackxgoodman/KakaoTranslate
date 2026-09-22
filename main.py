@@ -1,17 +1,24 @@
 import logging
 import sys
 import time
+from pathlib import Path
 
 from config import CHAT_NAME, POLL_INTERVAL
 from monitor import ChatMonitor
 from messenger import send_self_dm
 from translator import translate_to_english
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s  %(levelname)-8s  %(message)s',
-    datefmt='%H:%M:%S',
-)
+_LOG_FILE = Path(__file__).parent / 'kakaotranslate.log'
+
+_fmt = logging.Formatter('%(asctime)s  %(levelname)-8s  %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+_file_handler = logging.FileHandler(_LOG_FILE, encoding='utf-8')
+_file_handler.setFormatter(_fmt)
+
+_console_handler = logging.StreamHandler()
+_console_handler.setFormatter(_fmt)
+
+logging.basicConfig(level=logging.INFO, handlers=[_file_handler, _console_handler])
 logger = logging.getLogger(__name__)
 
 
