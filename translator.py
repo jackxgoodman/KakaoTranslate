@@ -1,36 +1,54 @@
+import logging
 import re
-import time
-from deep_translator import GoogleTranslator
+
+logger = logging.getLogger(__name__)
 
 _KOREAN_RE = re.compile(r'[가-힣ᄀ-ᇿ㄰-㆏]')
-# Separator unlikely to appear in Korean text or its translation
-_SEP = " ||| "
+_model_ready = False
 
 
 def has_korean(text: str) -> bool:
     return bool(_KOREAN_RE.search(text))
 
 
+def korean_char_count(text: str) -> int:
+    return len(_KOREAN_RE.findall(text))
+
+
+def _ensure_model() -> None:
+    global _model_ready
+    if _model_ready:
+        return
+    import argostranslate.package
+    import argostranslate.translate
+
+    installed = argostranslate.translate.get_installed_languages()
+    for lang in installed:
+        if lang.code == 'ko':
+            if any(t.to_lang.code == 'en' for t in lang.translations_from):
+                _model_ready = True
+                return
+
+    logger.info("Downloading Korean→English translation model (~150 MB) — please wait…")
+    argostranslate.package.update_package_index()
+    pkgs = argostranslate.package.get_available_packages()
+    pkg = next((p for p in pkgs if p.from_code == 'ko' and p.to_code == 'en'), None)
+    if pkg is None:
+        raise RuntimeError("Korean→English model not found. Check your internet connection.")
+    argostranslate.package.install_from_path(pkg.download())
+    _model_ready = True
+
+
 def translate_batch_to_english(texts: list) -> list:
-    """
-    Translate a list of Korean strings using a single API call by joining
-    them with a separator. One request per scan regardless of message count.
-    """
+    """Translate Korean strings offline via Argos Translate — no rate limits."""
     if not texts:
         return []
-
-    combined = _SEP.join(texts)
-    for attempt in range(4):
+    _ensure_model()
+    import argostranslate.translate
+    results = []
+    for text in texts:
         try:
-            result = GoogleTranslator(source='ko', target='en').translate(combined)
-            parts = result.split(_SEP)
-            # Align output length to input in case the separator got mangled
-            if len(parts) == len(texts):
-                return [p.strip() for p in parts]
-            # Fallback: return the whole translation as the first item
-            return [result] + [""] * (len(texts) - 1)
+            results.append(argostranslate.translate.translate(text, 'ko', 'en'))
         except Exception as e:
-            if attempt < 3:
-                time.sleep(2 ** attempt)  # 1s, 2s, 4s backoff
-                continue
-            return [f"[translation error: {e}]"] * len(texts)
+            results.append(f"[translation error: {e}]")
+    return results

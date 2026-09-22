@@ -13,7 +13,11 @@ import pygetwindow as gw
 from PIL import ImageGrab, Image
 
 from config import CHAT_NAME
-from translator import has_korean
+from translator import has_korean, korean_char_count
+
+# Sender names in KakaoTalk are typically 2–3 Korean syllables.
+# Only translate strings with at least this many Korean characters.
+_MIN_KOREAN_CHARS = 4
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +83,10 @@ class ChatMonitor:
             return []
 
         results = self.reader.readtext(np.array(img), detail=0, paragraph=False)
-        texts = [r.strip() for r in results if has_korean(r.strip())]
+        texts = [
+            r.strip() for r in results
+            if has_korean(r.strip()) and korean_char_count(r.strip()) >= _MIN_KOREAN_CHARS
+        ]
 
         # Deduplicate while preserving order
         seen_local: set = set()

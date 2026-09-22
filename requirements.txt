@@ -1,6 +1,6 @@
 easyocr>=1.6.2
 Pillow>=9.5.0
-deep-translator>=1.9.0
+argostranslate>=1.9.0
 pygetwindow>=0.0.9
 pyautogui>=0.9.54
 pyperclip>=1.8.2
