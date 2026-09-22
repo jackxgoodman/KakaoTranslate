@@ -1,0 +1,6 @@
+uiautomation>=2.0.18
+deep-translator>=1.9.0
+pygetwindow>=0.0.9
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+pywin32>=305
