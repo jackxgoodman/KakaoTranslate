@@ -14,32 +14,40 @@ import pyautogui
 import pyperclip
 import pygetwindow as gw
 
-from config import INPUT_BOX_Y_OFFSET
+from config import INPUT_BOX_Y_OFFSET, SELF_CHAT_TITLE
 
 logger = logging.getLogger(__name__)
 
-_SELF_CHAT_TITLE = '나와의 채팅'
 # pyautogui safety: move mouse to corner to abort
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
 
 
 def _find_self_chat() -> Optional[object]:
-    windows = gw.getWindowsWithTitle(_SELF_CHAT_TITLE)
+    if not SELF_CHAT_TITLE:
+        return None
+    windows = gw.getWindowsWithTitle(SELF_CHAT_TITLE)
     return windows[0] if windows else None
 
 
 def send_self_dm(message: str) -> bool:
     """
-    Click the input box in the '나와의 채팅' window, paste the message, and send.
+    Click the input box in the self-chat window, paste the message, and send.
     Returns True on success, False if the window is not found or an error occurs.
     """
+    if not SELF_CHAT_TITLE:
+        logger.warning(
+            "SELF_CHAT_TITLE is not set in config.py. "
+            "Open 'My Chatroom' in KakaoTalk, pop it out, and set SELF_CHAT_TITLE "
+            "to the exact text shown in the window's title bar."
+        )
+        return False
+
     window = _find_self_chat()
     if not window:
         logger.warning(
-            "Could not find '나와의 채팅' window. "
-            "Open KakaoTalk → right-click your own name or find '나와의 채팅' "
-            "→ double-click to pop it out as a separate window."
+            f"Could not find window titled '{SELF_CHAT_TITLE}'. "
+            "Make sure 'My Chatroom' is open as a separate pop-out window."
         )
         return False
 

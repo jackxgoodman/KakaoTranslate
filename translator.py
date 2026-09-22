@@ -8,8 +8,11 @@ def has_korean(text: str) -> bool:
     return bool(_KOREAN_RE.search(text))
 
 
-def translate_to_english(text: str) -> str:
+def translate_batch_to_english(texts: list) -> list:
+    """Translate a list of Korean strings in one API call to avoid rate limits."""
+    if not texts:
+        return []
     try:
-        return GoogleTranslator(source='ko', target='en').translate(text)
+        return GoogleTranslator(source='ko', target='en').translate_batch(texts)
     except Exception as e:
-        return f"[translation error: {e}]"
+        return [f"[translation error: {e}]"] * len(texts)

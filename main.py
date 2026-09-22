@@ -3,10 +3,10 @@ import sys
 import time
 from pathlib import Path
 
-from config import CHAT_NAME, POLL_INTERVAL
+from config import CHAT_NAME, POLL_INTERVAL, SELF_CHAT_TITLE
 from monitor import ChatMonitor
 from messenger import send_self_dm
-from translator import translate_to_english
+from translator import translate_batch_to_english
 
 _LOG_FILE = Path(__file__).parent / 'kakaotranslate.log'
 
@@ -36,7 +36,7 @@ def main() -> None:
     logger.info(f"  Poll every : {POLL_INTERVAL}s")
     logger.info("  Make sure KakaoTalk is open with:")
     logger.info(f"    1. The group chat '{CHAT_NAME}' visible")
-    logger.info("    2. '나와의 채팅' open as a separate pop-out window")
+    logger.info(f"    2. My Chatroom ('{SELF_CHAT_TITLE}') open as a separate pop-out window")
     logger.info("  Press Ctrl+C to stop.")
     logger.info("=" * 60)
 
@@ -44,11 +44,13 @@ def main() -> None:
 
     while True:
         try:
-            for korean_text in monitor.get_new_messages():
-                logger.info(f"KO  {korean_text}")
-                english = translate_to_english(korean_text)
-                logger.info(f"EN  {english}")
-                send_self_dm(f"[번역] {english}")
+            new_messages = monitor.get_new_messages()
+            if new_messages:
+                translations = translate_batch_to_english(new_messages)
+                for korean_text, english in zip(new_messages, translations):
+                    logger.info(f"KO  {korean_text}")
+                    logger.info(f"EN  {english}")
+                    send_self_dm(f"[번역] {english}")
         except KeyboardInterrupt:
             logger.info("Stopped by user.")
             break
