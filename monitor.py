@@ -8,6 +8,7 @@ so we capture the chat area as an image and run easyocr over it.
 import logging
 from typing import List, Optional
 
+import numpy as np
 import pygetwindow as gw
 from PIL import ImageGrab, Image
 
@@ -77,7 +78,7 @@ class ChatMonitor:
         if img is None:
             return []
 
-        results = self.reader.readtext(img, detail=0, paragraph=False)
+        results = self.reader.readtext(np.array(img), detail=0, paragraph=False)
         texts = [r.strip() for r in results if has_korean(r.strip())]
 
         # Deduplicate while preserving order
