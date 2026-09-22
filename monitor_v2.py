@@ -26,6 +26,19 @@ _SENTENCE_END = re.compile(
     r'(다|요|해|며|면|서|고|야|어|죠|까|니다|습니다|ㅋ|ㅎ|!|\?)\s*$'
 )
 
+# OCR noise patterns to discard
+_TIMESTAMP_RE = re.compile(r'^\d{1,2}[.:]\d{2}\s*[A-Za-z]{0,2}$')
+_REPLY_RE = re.compile(r'^Reply\s+to\s|^답장\s*:', re.IGNORECASE)
+_PLACEHOLDER_RE = re.compile(r'^(enter\s*a?\s*message|eriter|mnessage|enter|message)$', re.IGNORECASE)
+
+
+def _is_noise(text: str) -> bool:
+    return bool(
+        _TIMESTAMP_RE.match(text)
+        or _REPLY_RE.match(text)
+        or _PLACEHOLDER_RE.match(text)
+    )
+
 
 @dataclass
 class ChatMessage:
@@ -94,7 +107,7 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
 
     for bbox, text, _conf in sorted_items:
         text = text.strip()
-        if not text:
+        if not text or _is_noise(text):
             continue
 
         has_k = has_korean(text)
@@ -152,7 +165,7 @@ class ChatMonitor:
             w, h = window.width, window.height
             title = window.title or ''
             x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
-            return ImageGrab.grab(bbox=(x1, top + 70, left + w, top + h - 80))
+            return ImageGrab.grab(bbox=(x1, top + 70, left + w, top + h - 130))
         except Exception as e:
             logger.warning(f"Screenshot failed: {e}")
             return None
