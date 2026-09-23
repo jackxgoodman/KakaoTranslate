@@ -12,7 +12,7 @@ from typing import List, Optional
 
 import numpy as np
 import pygetwindow as gw
-from PIL import ImageGrab
+from PIL import Image, ImageGrab
 
 from config import CHAT_NAME
 from translator import has_korean, korean_char_count
