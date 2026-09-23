@@ -3,6 +3,10 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# Suppress verbose internal logging from argostranslate and stanza
+for _noisy in ('argostranslate', 'stanza', 'ctranslate2'):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 _KOREAN_RE = re.compile(r'[가-힣ᄀ-ᇿ㄰-㆏]')
 _model_ready = False
 

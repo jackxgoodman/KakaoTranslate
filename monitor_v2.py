@@ -21,10 +21,16 @@ logger = logging.getLogger(__name__)
 
 _KAKAO_TITLES = ('KakaoTalk', '카카오톡')
 
+# Drop OCR results below this confidence — image thumbnails score much lower
+_MIN_OCR_CONF = 0.35
+
 # Sentence-ending particles / endings that only appear in messages, not names
 _SENTENCE_END = re.compile(
     r'(다|요|해|며|면|서|고|야|어|죠|까|니다|습니다|ㅋ|ㅎ|!|\?)\s*$'
 )
+
+# Short capitalised English display names like "MK", "Y", "Sonny K"
+_ENGLISH_NAME_RE = re.compile(r'^[A-Z][A-Za-z]*(\s[A-Z][A-Za-z]*)*$')
 
 # OCR noise patterns to discard
 _TIMESTAMP_RE = re.compile(r'^\d{1,2}[.:]\d{2}\s*[A-Za-z]{0,2}$')
@@ -63,9 +69,22 @@ def _could_be_name(text: str) -> bool:
         return False
     if _SENTENCE_END.search(text):
         return False  # verb/adjective endings → message
-    if len(text.split()) > 4:
+    if len(text.split()) > 5:
         return False  # too many words to be a name
+    # Reject pure-Korean 2-char fragments that end a sentence (e.g. "니당", "니다")
+    if kcount == 2 and text.strip() == text and len(text) <= 3:
+        return False
     return True
+
+
+def _could_be_english_name(text: str) -> bool:
+    """Return True for short English-only display names like 'MK' or 'Y'."""
+    if has_korean(text):
+        return False
+    if not _ENGLISH_NAME_RE.match(text):
+        return False
+    words = text.split()
+    return 1 <= len(words) <= 3 and len(text) <= 20
 
 
 # ── Bounding-box helpers ──────────────────────────────────────────────────
@@ -109,12 +128,19 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
         text = text.strip()
         if not text or _is_noise(text):
             continue
+        if _conf < _MIN_OCR_CONF:
+            continue
 
         has_k = has_korean(text)
         kcount = korean_char_count(text)
         is_english_only = not has_k and len(text) > 3
 
-        if has_k and _could_be_name(text):
+        is_name_candidate = (
+            (has_k and _could_be_name(text))
+            or (not has_k and _could_be_english_name(text))
+        )
+
+        if is_name_candidate:
             if pending_name is not None:
                 # Previous candidate was not followed by a message → treat as message
                 messages.append(ChatMessage(sender=current_sender, text=pending_name))
