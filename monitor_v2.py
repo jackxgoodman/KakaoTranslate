@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _KAKAO_TITLES = ('KakaoTalk', '카카오톡')
 
 # Drop OCR results below this confidence — image thumbnails score much lower
-_MIN_OCR_CONF = 0.35
+_MIN_OCR_CONF = 0.25
 
 # Sentence-ending particles / endings that only appear in messages, not names
 _SENTENCE_END = re.compile(
@@ -33,7 +33,7 @@ _SENTENCE_END = re.compile(
 _ENGLISH_NAME_RE = re.compile(r'^[A-Z][A-Za-z]*(\s[A-Z][A-Za-z]*)*$')
 
 # OCR noise patterns to discard
-_TIMESTAMP_RE = re.compile(r'^\d{1,2}[.:]\d{2}\s*[A-Za-z]{0,2}$')
+_TIMESTAMP_RE = re.compile(r'^\d{1,2}[.:]\d{2}\s*[A-Za-z]{0,3}$')
 _REPLY_RE = re.compile(r'^Reply\s+to\s|^답장\s*:', re.IGNORECASE)
 _PLACEHOLDER_RE = re.compile(r'^(enter\s*a?\s*message|eriter|mnessage|enter|message)$', re.IGNORECASE)
 
