@@ -210,6 +210,8 @@ class ChatMonitor:
         img = self._screenshot_chat(window)
         if img is None:
             return []
+        # Upscale 2× before OCR — larger pixels improve accuracy on small chat text
+        img = img.resize((img.width * 2, img.height * 2), resample=Image.LANCZOS)
         results = self.reader.readtext(np.array(img), detail=1)
         return _parse_messages(results)
 
