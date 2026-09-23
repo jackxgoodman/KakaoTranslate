@@ -206,7 +206,7 @@ class ChatMonitor:
             w, h = window.width, window.height
             title = window.title or ''
             x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
-            return ImageGrab.grab(bbox=(x1, top + 220, left + w, top + h - 190))
+            return ImageGrab.grab(bbox=(x1, top + 80, left + w, top + h - 190))
         except Exception as e:
             logger.warning(f"Screenshot failed: {e}")
             return None
