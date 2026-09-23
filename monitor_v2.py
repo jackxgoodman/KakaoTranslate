@@ -131,7 +131,7 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
     messages: List[ChatMessage] = []
     current_sender = ""
     pending_name: Optional[str] = None
-    skip_reply_quote = False  # drop the quoted text that follows a "Reply to" line
+    skip_quote_chunks = 0  # how many OCR chunks to drop after a "Reply to" line
 
     for bbox, text, _conf in sorted_items:
         text = text.strip()
@@ -140,10 +140,10 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
         if _conf < _MIN_OCR_CONF:
             continue
         if _REPLY_RE.match(text):
-            skip_reply_quote = True
+            skip_quote_chunks = 3  # skip up to 3 quote chunks (handles wrapping)
             continue
-        if skip_reply_quote:
-            skip_reply_quote = False
+        if skip_quote_chunks > 0:
+            skip_quote_chunks -= 1
             continue
 
         has_k = has_korean(text)
@@ -206,7 +206,7 @@ class ChatMonitor:
             w, h = window.width, window.height
             title = window.title or ''
             x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
-            return ImageGrab.grab(bbox=(x1, top + 195, left + w, top + h - 190))
+            return ImageGrab.grab(bbox=(x1, top + 220, left + w, top + h - 190))
         except Exception as e:
             logger.warning(f"Screenshot failed: {e}")
             return None
