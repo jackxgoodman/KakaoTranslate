@@ -69,10 +69,15 @@ def _could_be_name(text: str) -> bool:
         return False
     if _SENTENCE_END.search(text):
         return False  # verb/adjective endings → message
-    if len(text.split()) > 5:
-        return False  # too many words to be a name
-    # Reject pure-Korean 2-char fragments that end a sentence (e.g. "니당", "니다")
-    if kcount == 2 and text.strip() == text and len(text) <= 3:
+    words = text.split()
+    if len(words) > 5:
+        return False
+    # Korean names are written as a single word (no spaces). Multi-word pure-Korean
+    # chunks like "유 드려오" or "허얼 조저야지" are message fragments, not names.
+    if len(words) > 1 and all(has_korean(w) for w in words):
+        return False
+    # Reject tiny fragments (e.g. "니당" split from "감사합니다")
+    if kcount == 2 and len(text) <= 3:
         return False
     return True
 
@@ -146,7 +151,7 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
                 messages.append(ChatMessage(sender=current_sender, text=pending_name))
             pending_name = text
 
-        elif (has_k and kcount >= 1) or is_english_only:
+        elif (has_k and kcount >= 3) or is_english_only:
             if pending_name is not None:
                 # Confirm the pending candidate as the sender for this message
                 current_sender = pending_name
