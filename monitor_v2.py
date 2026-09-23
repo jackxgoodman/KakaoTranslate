@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _KAKAO_TITLES = ('KakaoTalk', '카카오톡')
 
 # Drop OCR results below this confidence — image thumbnails score much lower
-_MIN_OCR_CONF = 0.25
+_MIN_OCR_CONF = 0.20
 
 # Sentence-ending particles / endings that only appear in messages, not names
 _SENTENCE_END = re.compile(
@@ -41,7 +41,6 @@ _PLACEHOLDER_RE = re.compile(r'^(enter\s*a?\s*message|eriter|mnessage|enter|mess
 def _is_noise(text: str) -> bool:
     return bool(
         _TIMESTAMP_RE.match(text)
-        or _REPLY_RE.match(text)
         or _PLACEHOLDER_RE.match(text)
     )
 
@@ -206,7 +205,7 @@ class ChatMonitor:
             w, h = window.width, window.height
             title = window.title or ''
             x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
-            return ImageGrab.grab(bbox=(x1, top + 80, left + w, top + h - 190))
+            return ImageGrab.grab(bbox=(x1, top + 160, left + w, top + h - 190))
         except Exception as e:
             logger.warning(f"Screenshot failed: {e}")
             return None
