@@ -83,13 +83,16 @@ def _could_be_name(text: str) -> bool:
 
 
 def _could_be_english_name(text: str) -> bool:
-    """Return True for short English-only display names like 'MK' or 'Y'."""
+    """Return True for short English-only display names like 'MK', 'Y', 'Erik'."""
     if has_korean(text):
         return False
-    if not _ENGLISH_NAME_RE.match(text):
+    # Must be a single capitalised word of 1–8 chars — rules out multi-word
+    # English text fragments like "National Galbi" or "Every Day"
+    if ' ' in text:
         return False
-    words = text.split()
-    return 1 <= len(words) <= 3 and len(text) <= 20
+    if not text[0].isupper() or not text.isalpha():
+        return False
+    return 1 <= len(text) <= 8
 
 
 # ── Bounding-box helpers ──────────────────────────────────────────────────
@@ -128,12 +131,19 @@ def _parse_messages(ocr_results) -> List[ChatMessage]:
     messages: List[ChatMessage] = []
     current_sender = ""
     pending_name: Optional[str] = None
+    skip_reply_quote = False  # drop the quoted text that follows a "Reply to" line
 
     for bbox, text, _conf in sorted_items:
         text = text.strip()
         if not text or _is_noise(text):
             continue
         if _conf < _MIN_OCR_CONF:
+            continue
+        if _REPLY_RE.match(text):
+            skip_reply_quote = True
+            continue
+        if skip_reply_quote:
+            skip_reply_quote = False
             continue
 
         has_k = has_korean(text)
@@ -196,7 +206,7 @@ class ChatMonitor:
             w, h = window.width, window.height
             title = window.title or ''
             x1 = left + int(w * 0.35) if title in _KAKAO_TITLES else left
-            return ImageGrab.grab(bbox=(x1, top + 220, left + w, top + h - 190))
+            return ImageGrab.grab(bbox=(x1, top + 195, left + w, top + h - 190))
         except Exception as e:
             logger.warning(f"Screenshot failed: {e}")
             return None
