@@ -1,119 +1,84 @@
 # KakaoTranslate
 
-Watches a KakaoTalk group chat, translates every new Korean message into English, and sends the translation to your **나와의 채팅** (Note to Self). Because KakaoTalk syncs across devices, the translations appear on your iPhone in real time.
-
----
-
-## How it works
+Watches a KakaoTalk group chat on a Windows PC, translates new Korean messages into English (offline, free), and sends them to your **My Chatroom** (나와의 채팅), which syncs to your phone.
 
 ```
-KakaoTalk (Windows, group chat visible)
-        ↓  Windows UI Automation reads text
-    monitor.py  ──→  translator.py  ──→  messenger.py
-                     (Google Translate,     (types into 나와의 채팅
-                      free, no API key)      → syncs to iPhone)
+[김민준] 언제가면되려나?
+→ When should I go?
+
+[Alex] Every day is national galbi day for me
 ```
 
-The script polls the KakaoTalk window every 5 seconds using the Windows Accessibility API — no screen recording, no OCR, no paid APIs.
+## Three versions
 
----
+| | How it reads the chat | Pros | Cons |
+|---|---|---|---|
+| **v3** `main_v3.py` (recommended) | Selects all + copies the chat's message list via Win32 messages, reads the clipboard | Exact text and names, no OCR model, near-zero CPU, windows can be covered, works at any text size | Depends on KakaoTalk's window internals — run `test_v3.py` to confirm your version works |
+| **v2** `main_v2.py` | Captures the window, OCRs it, and reads the visual layout (bubbles, names, profile pictures, grey reply quotes) | Works with any app version that looks like KakaoTalk | OCR misreads some Korean; needs a model or the Windows Korean OCR pack |
+| **v1** `main.py` | Screenshot + OCR, Korean text only, no sender names | Simplest | Least accurate |
 
-## Requirements
-
-- Windows 10 / 11 (the computer must stay signed in — not locked)
-- Python 3.9 or later → [python.org](https://www.python.org/downloads/)
-- KakaoTalk for Windows → [kakaocorp.com](https://www.kakaocorp.com/page/service/service/KakaoTalk)
-
----
+All versions translate with **NLLB-200** (better on casual Korean) or **Argos Translate** (lighter) — see `TRANSLATOR` in `config.py`.
 
 ## Setup
 
-### 1. Clone / download the project
+1. **Install Python 3.9+** and **KakaoTalk for Windows**, then in the project folder:
+   ```
+   pip install -r requirements.txt
+   ```
+2. **Configure.** Create `config_local.py` next to `config.py` (git ignores it, so `git pull` never conflicts):
+   ```python
+   CHAT_NAME = "스터디 그룹"        # exact title of the group chat window
+   SELF_CHAT_TITLE = "Your Name"   # exact title of your My Chatroom window
+   ```
+   Any other setting from `config.py` can be overridden here too.
+3. **Prepare KakaoTalk.** Double-click the group chat and My Chatroom in KakaoTalk so each opens as its **own window**. For v2/v3 they can sit behind other windows; don't minimise the group chat for v2. Keep the group chat scrolled to the bottom.
+4. **v2 only — optional but recommended:** install Windows' Korean OCR, which is faster and more accurate than easyocr. In an **admin PowerShell**:
+   ```
+   Add-WindowsCapability -Online -Name "Language.OCR~~~ko-KR~0.0.1.0"
+   ```
+5. **Test, then run.**
+   ```
+   python test_v3.py        (or test_v2.py / test.py)
+   python main_v3.py        (or main_v2.py / main.py)
+   ```
+   `test_v3.py` writes `v3_clipboard_dump.txt`; `test_v2.py` writes `debug_v2.png` showing how each piece of text was classified. Add `--no-send` to skip the test DM.
 
-```
-git clone https://github.com/jackxgoodman/kakaotranslate.git
-cd kakaotranslate
-```
-
-### 2. Install Python dependencies
-
-Open **Command Prompt** or **PowerShell** in the project folder and run:
-
-```
-pip install -r requirements.txt
-```
-
-### 3. Configure
-
-Open `config.py` in any text editor and set `CHAT_NAME` to the **exact** name of the group chat you want to monitor (copy-paste it from KakaoTalk):
-
-```python
-CHAT_NAME = "스터디 그룹"   # ← your group chat name here
-```
-
-### 4. Prepare KakaoTalk
-
-Before starting the script, arrange KakaoTalk on your Windows PC like this:
-
-1. Open KakaoTalk and log in.
-2. Open the group chat (leave it visible on screen — don't minimize it).
-3. Find **나와의 채팅** in the chat list → **double-click** it to open it as a **separate pop-out window**.
-4. Both windows must remain visible on screen (not minimized) while the script runs.
-
-> **Tip:** Disable your screen saver and set Windows power settings to *Never* sleep, so the script keeps working overnight.
-
-### 5. Run
-
-```
-python main.py
-```
-
-You'll see output like:
-
-```
-10:32:05  INFO      Initialized. Skipped 47 existing messages. Watching for new ones…
-10:35:12  INFO      KO  오늘 모임 몇 시예요?
-10:35:12  INFO      EN  What time is today's meeting?
-10:35:12  INFO      DM sent: [번역] What time is today's meeting?
-```
-
-Stop it at any time with **Ctrl+C**.
-
----
+The first run downloads the translation model (~2.5 GB for NLLB, ~150 MB for Argos).
 
 ## Auto-start after reboot
 
-To have KakaoTranslate start automatically every time the computer boots, run the installer once:
+1. Set `AUTOSTART_VERSION = 3` (or 1 / 2) in `config_local.py`.
+2. Right-click `install_task.bat` → **Run as administrator**. It starts the chosen version 60 s after login.
+3. Turn on **KakaoTalk → Settings → General → Run KakaoTalk when Windows starts**, and set Windows to never sleep.
 
-1. **Right-click `install_task.bat`** → **Run as administrator**
-2. Follow the on-screen prompt — it registers a Windows Task Scheduler entry that launches the script 60 seconds after login (giving KakaoTalk time to open first).
-3. Also enable KakaoTalk's own auto-start: **KakaoTalk → Settings → General → "Run KakaoTalk when Windows starts"**.
+Logs: `kakaotranslate.log`, `kakaotranslate_v2.log`, `kakaotranslate_v3.log`. Remove auto-start with `uninstall_task.bat`.
 
-Logs (including any errors) are written to `kakaotranslate.log` in the project folder.
+## Settings worth knowing (`config.py`)
 
-To remove auto-start: **right-click `uninstall_task.bat`** → **Run as administrator**.
-
----
+| Setting | Default | Meaning |
+|---|---|---|
+| `TRANSLATOR` | `"nllb"` | `"nllb"` (better, ~2.5 GB RAM) or `"argos"` (light) |
+| `BATCH_DMS` | `True` | One DM per check with all new messages |
+| `INCLUDE_OWN_MESSAGES` | `False` | Also translate your own messages |
+| `OCR_ENGINE` | `"auto"` | v2: `"windows"`, `"easyocr"` or `"auto"` |
+| `HEADER_HEIGHT` | `None` | v2: set only if the chat header isn't detected |
+| `SEND_METHOD_V3` | `"auto"` | v3: `"message"` (no focus change) or `"keyboard"` |
 
 ## Troubleshooting
 
 | Symptom | Fix |
-|---------|-----|
-| `CHAT_NAME is not set` | Set `CHAT_NAME` in `config.py` |
-| `KakaoTalk window not found` | Make sure KakaoTalk is open and not minimized |
-| `나와의 채팅 window not found` | Double-click '나와의 채팅' in KakaoTalk to open it as a pop-out window |
-| Messages detected but not translated | Check internet connection; Google Translate is used |
-| Click lands outside the input box | Increase `INPUT_BOX_Y_OFFSET` in `config.py` (try 60, 70, …) |
-| No messages detected at all | KakaoTalk may not expose its chat text via accessibility. See *Alternative (OCR)* below |
+|---|---|
+| v3: "Couldn't copy the chat's messages" | Run `test_v3.py` and check section 1 lists a message list and input box for the chat |
+| v3: messages parsed wrongly | Send a few lines of `v3_clipboard_dump.txt` so the parser can be adjusted |
+| v2: wrong or missing senders | Open `debug_v2.png` after `test_v2.py` to see what was detected |
+| v2: "Windows OCR unavailable" | Install the Korean OCR pack (setup step 4) or set `OCR_ENGINE = "easyocr"` |
+| Window not found | Titles must match exactly; open the chat as its own window |
+| v1/v2: click misses the input box | Increase `INPUT_BOX_Y_OFFSET` |
+| NLLB fails to load | It falls back to Argos automatically; check the log for the reason |
 
----
+## Development
 
-## Alternative: OCR-based monitoring
-
-If the UI Automation approach picks up no messages (some KakaoTalk versions use custom rendering that bypasses accessibility), you can fall back to screenshot + OCR:
-
-1. Install [Tesseract for Windows](https://github.com/UB-Mannheim/tesseract/wiki) — during installation, check **Additional script data → Korean**.
-2. `pip install pytesseract Pillow`
-3. Replace the body of `ChatMonitor._get_visible_korean()` in `monitor.py` with a screenshot + `pytesseract.image_to_string(img, lang='kor')` call.
-
-The OCR path is not included by default to keep setup lightweight.
+`chat_parser.py`, `message_diff.py` and `chat_layout.py` are pure Python and tested on any OS:
+```
+python -m unittest discover -s tests -t .
+```
