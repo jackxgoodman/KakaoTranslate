@@ -1,92 +1,74 @@
 """
-Send a message to the '나와의 채팅' (Note to Self) KakaoTalk window.
+Send a message to your "My Chatroom" KakaoTalk window (v1 and v2).
 
-The user must have that chat open as a standalone pop-out window
-(double-click the chat in the KakaoTalk sidebar to pop it out).
-Messages sent here sync automatically to the user's iPhone.
+The self-chat must be open as its own pop-out window; its title is
+SELF_CHAT_TITLE. Messages sent here sync to your phone. After sending, the
+window you were using and your clipboard are put back.
 """
 
 import ctypes
-import ctypes.wintypes
 import logging
 import time
-from typing import Optional
 
 import pyautogui
 import pyperclip
-import pygetwindow as gw
+import win32con
+import win32gui
 
 from config import INPUT_BOX_Y_OFFSET, SELF_CHAT_TITLE
+from winutil import find_window
 
 logger = logging.getLogger(__name__)
 
 _user32 = ctypes.windll.user32
 _kernel32 = ctypes.windll.kernel32
 
-# pyautogui safety: move mouse to corner to abort
-pyautogui.FAILSAFE = True
+pyautogui.FAILSAFE = True  # move the mouse to a screen corner to abort
 pyautogui.PAUSE = 0.05
 
 
 def _bring_to_foreground(hwnd: int) -> None:
-    """
-    Reliably bring a window to the foreground on Windows.
-    pygetwindow's activate() uses SetForegroundWindow directly, which Windows
-    blocks unless the calling process is attached to the foreground thread.
-    This function attaches first, then sets the foreground window.
-    """
-    # Restore if minimised
-    _user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-
-    fg_hwnd = _user32.GetForegroundWindow()
-    fg_tid = _user32.GetWindowThreadProcessId(fg_hwnd, None)
+    """SetForegroundWindow is refused unless we attach to the foreground thread first."""
+    if win32gui.IsIconic(hwnd):
+        _user32.ShowWindow(hwnd, win32con.SW_RESTORE)
+    fg_tid = _user32.GetWindowThreadProcessId(_user32.GetForegroundWindow(), None)
     our_tid = _kernel32.GetCurrentThreadId()
-
     if fg_tid and fg_tid != our_tid:
         _user32.AttachThreadInput(fg_tid, our_tid, True)
         _user32.SetForegroundWindow(hwnd)
         _user32.AttachThreadInput(fg_tid, our_tid, False)
     else:
         _user32.SetForegroundWindow(hwnd)
-
     time.sleep(0.35)
 
 
-def _find_self_chat() -> Optional[object]:
-    if not SELF_CHAT_TITLE:
-        return None
-    windows = gw.getWindowsWithTitle(SELF_CHAT_TITLE)
-    return windows[0] if windows else None
-
-
 def send_self_dm(message: str) -> bool:
-    """
-    Bring the self-chat window to the foreground, click its input box,
-    paste the message, and send. Returns True on success.
-    """
+    """Paste `message` into the self-chat and press Enter. Returns True on success."""
     if not SELF_CHAT_TITLE:
         logger.warning(
-            "SELF_CHAT_TITLE is not set in config.py. "
-            "Open 'My Chatroom' in KakaoTalk, pop it out, and set SELF_CHAT_TITLE "
-            "to the exact text shown in the window's title bar."
+            "SELF_CHAT_TITLE is not set in config.py. Open 'My Chatroom' in KakaoTalk, pop it out, "
+            "and set SELF_CHAT_TITLE to the exact text shown in the window's title bar."
         )
         return False
 
-    window = _find_self_chat()
-    if not window:
+    hwnd = find_window(SELF_CHAT_TITLE)
+    if not hwnd:
         logger.warning(
             f"Could not find window titled '{SELF_CHAT_TITLE}'. "
             "Make sure 'My Chatroom' is open as a separate pop-out window."
         )
         return False
 
+    previous_window = win32gui.GetForegroundWindow()
     try:
-        _bring_to_foreground(window._hWnd)
+        previous_clipboard = pyperclip.paste()
+    except Exception:
+        previous_clipboard = None
 
-        # Click the message input area (bottom-centre of the chat window)
-        x = window.left + window.width // 2
-        y = window.top + window.height - INPUT_BOX_Y_OFFSET
-        pyautogui.click(x, y)
+    try:
+        _bring_to_foreground(hwnd)
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        pyautogui.click((left + right) // 2, bottom - INPUT_BOX_Y_OFFSET)
         time.sleep(0.2)
 
         pyperclip.copy(message)
@@ -97,7 +79,17 @@ def send_self_dm(message: str) -> bool:
 
         logger.info(f"DM sent: {message[:100]}")
         return True
-
     except Exception as e:
         logger.error(f"Failed to send DM: {e}")
         return False
+    finally:
+        if previous_clipboard is not None:
+            try:
+                pyperclip.copy(previous_clipboard)
+            except Exception:
+                pass
+        if previous_window and previous_window != hwnd and win32gui.IsWindow(previous_window):
+            try:
+                _bring_to_foreground(previous_window)
+            except Exception:
+                pass

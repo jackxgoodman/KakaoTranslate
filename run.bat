@@ -1,5 +1,5 @@
 @echo off
 :: Wrapper called by Task Scheduler.
-:: Sets the working directory to the script folder before launching.
+:: Starts the version set by AUTOSTART_VERSION in config.py / config_local.py.
 cd /d "%~dp0"
-python main.py
+python start.py

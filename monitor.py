@@ -6,6 +6,7 @@ so we capture the chat area as an image and run easyocr over it.
 """
 
 import logging
+from collections import OrderedDict
 from typing import List, Optional
 
 import numpy as np
@@ -33,7 +34,7 @@ def _load_reader():
 class ChatMonitor:
     def __init__(self) -> None:
         self._reader = None  # lazy-loaded on first scan
-        self._seen: set = set()
+        self._seen: 'OrderedDict[str, None]' = OrderedDict()  # insertion-ordered, so trimming drops the oldest
         self._seeded: bool = False
 
     @property
@@ -71,16 +72,17 @@ class ChatMonitor:
             logger.warning(f"Screenshot failed: {e}")
             return None
 
-    def _get_visible_korean(self) -> List[str]:
+    def _get_visible_korean(self) -> Optional[List[str]]:
+        """Visible Korean messages, or None if the chat couldn't be captured."""
         window = self._find_chat_window()
         if not window:
             if self._seeded:
                 logger.warning(f"KakaoTalk window not found — is '{CHAT_NAME}' open?")
-            return []
+            return None
 
         img = self._screenshot_chat(window)
         if img is None:
-            return []
+            return None
 
         results = self.reader.readtext(np.array(img), detail=0, paragraph=False)
         texts = [
@@ -104,9 +106,11 @@ class ChatMonitor:
         so old messages are not translated on startup.
         """
         messages = self._get_visible_korean()
+        if messages is None:
+            return []  # don't seed until the chat has actually been read
 
         if not self._seeded:
-            self._seen.update(messages)
+            self._seen.update(dict.fromkeys(messages))
             self._seeded = True
             logger.info(
                 f"Initialized. Skipped {len(self._seen)} existing messages. "
@@ -115,9 +119,9 @@ class ChatMonitor:
             return []
 
         new = [m for m in messages if m not in self._seen]
-        self._seen.update(new)
+        self._seen.update(dict.fromkeys(new))
 
-        if len(self._seen) > 2000:
-            self._seen = set(list(self._seen)[-2000:])
+        while len(self._seen) > 2000:
+            self._seen.popitem(last=False)
 
         return new

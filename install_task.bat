@@ -34,8 +34,9 @@ if %ERRORLEVEL% EQU 0 (
     echo  IMPORTANT — also make KakaoTalk start at login:
     echo    KakaoTalk ^> Settings ^> General ^> "Run KakaoTalk when Windows starts"
     echo.
-    echo  Logs are written to:
-    echo    !SCRIPT_DIR!\kakaotranslate.log
+    echo  It starts the version set by AUTOSTART_VERSION in config.py.
+    echo  Logs are written to kakaotranslate.log / _v2.log / _v3.log in:
+    echo    !SCRIPT_DIR!
     echo.
     echo  To remove auto-start, run uninstall_task.bat
 ) else (

@@ -1,7 +1,14 @@
-easyocr>=1.6.2
+# All versions
+pywin32>=305
 Pillow>=9.5.0
-argostranslate>=1.9.0
+numpy>=1.24
+argostranslate>=1.9.0      # light translator / fallback
+torch>=2.6                 # NLLB translator (and easyocr)
+transformers>=4.40         # NLLB translator
+
+# v1 / v2 (screen OCR)
+easyocr>=1.6.2
+winocr>=0.0.15             # Windows built-in OCR bindings (v2)
 pygetwindow>=0.0.9
 pyautogui>=0.9.54
 pyperclip>=1.8.2
-pywin32>=305

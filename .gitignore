@@ -1,0 +1,5 @@
+__pycache__/
+config_local.py
+*.log
+debug_v2.png
+v3_clipboard_dump.txt
