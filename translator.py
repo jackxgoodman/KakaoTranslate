@@ -9,6 +9,7 @@ Backends (config.TRANSLATOR):
 """
 
 import logging
+import os
 import re
 from collections import OrderedDict
 from typing import List
@@ -17,8 +18,10 @@ from config import TRANSLATOR
 
 logger = logging.getLogger(__name__)
 
+os.environ.setdefault('HF_HUB_DISABLE_SYMLINKS_WARNING', '1')
 for _noisy in ('argostranslate', 'stanza', 'ctranslate2', 'transformers'):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
+logging.getLogger('huggingface_hub').setLevel(logging.ERROR)
 
 _KOREAN_RE = re.compile(r'[가-힣ᄀ-ᇿ㄰-㆏]')
 _CACHE_SIZE = 1000

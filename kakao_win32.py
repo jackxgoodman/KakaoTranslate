@@ -100,15 +100,17 @@ def _post_key(hwnd: int, vk: int, ctrl: bool = False) -> None:
     target_tid = win32process.GetWindowThreadProcessId(hwnd)[0]
     attached = bool(_user32.AttachThreadInput(our_tid, target_tid, True))
     try:
-        original = win32api.GetKeyboardState()
-        pressed = bytearray(original)
+        KeyState = ctypes.c_ubyte * 256
+        original = KeyState()
+        _user32.GetKeyboardState(original)
+        pressed = KeyState.from_buffer_copy(original)
         pressed[win32con.VK_CONTROL] = 0x80
         pressed[win32con.VK_LCONTROL] = 0x80
-        win32api.SetKeyboardState(bytes(pressed))
+        _user32.SetKeyboardState(pressed)
         win32api.PostMessage(hwnd, win32con.WM_KEYDOWN, vk, lparam_down)
         win32api.PostMessage(hwnd, win32con.WM_KEYUP, vk, lparam_up)
         time.sleep(0.15)  # let KakaoTalk process the keys while Ctrl reads as held
-        win32api.SetKeyboardState(original)
+        _user32.SetKeyboardState(original)
     finally:
         if attached:
             _user32.AttachThreadInput(our_tid, target_tid, False)
@@ -362,7 +364,11 @@ class ChatSender:
         return True
 
     def _arrived(self, hwnd: int, text: str) -> bool:
-        copied = self.reader.copy_text(hwnd)
+        try:
+            copied = self.reader.copy_text(hwnd)
+        except Exception as exc:
+            logger.warning(f"Couldn't read My Chatroom back to confirm the DM: {exc}")
+            return False
         if not copied:
             return False
         tail = copied.replace('\r\n', '\n')[-(len(text) + 200):]
