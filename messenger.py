@@ -1,9 +1,9 @@
 """
-Send a message to your "My Chatroom" KakaoTalk window (v1 and v2).
+Send messages into KakaoTalk chat windows (v1 and v2): your "My Chatroom"
+(SELF_CHAT_TITLE) and anyone listed in EXTRA_RECIPIENTS.
 
-The self-chat must be open as its own pop-out window; its title is
-SELF_CHAT_TITLE. Messages sent here sync to your phone. After sending, the
-window you were using and your clipboard are put back.
+Each chat must be open as its own pop-out window. After sending, the window
+you were using and your clipboard are put back.
 """
 
 import ctypes
@@ -16,6 +16,7 @@ import win32con
 import win32gui
 
 from config import INPUT_BOX_Y_OFFSET, SELF_CHAT_TITLE
+from dm_format import dm_recipients
 from winutil import find_window
 
 logger = logging.getLogger(__name__)
@@ -43,19 +44,32 @@ def _bring_to_foreground(hwnd: int) -> None:
 
 
 def send_self_dm(message: str) -> bool:
-    """Paste `message` into the self-chat and press Enter. Returns True on success."""
+    """Send `message` to your My Chatroom only. Returns True on success."""
     if not SELF_CHAT_TITLE:
         logger.warning(
             "SELF_CHAT_TITLE is not set in config.py. Open 'My Chatroom' in KakaoTalk, pop it out, "
             "and set SELF_CHAT_TITLE to the exact text shown in the window's title bar."
         )
         return False
+    return send_dm(SELF_CHAT_TITLE, message)
 
-    hwnd = find_window(SELF_CHAT_TITLE)
+
+def send_to_recipients(message: str) -> bool:
+    """Send `message` to My Chatroom and every EXTRA_RECIPIENTS chat. True if all succeeded."""
+    titles = dm_recipients()
+    if not titles:
+        return send_self_dm(message)  # logs why nothing is configured
+    results = [send_dm(title, message) for title in titles]
+    return all(results)
+
+
+def send_dm(title: str, message: str) -> bool:
+    """Paste `message` into the chat window titled `title` and press Enter. Returns True on success."""
+    hwnd = find_window(title)
     if not hwnd:
         logger.warning(
-            f"Could not find window titled '{SELF_CHAT_TITLE}'. "
-            "Make sure 'My Chatroom' is open as a separate pop-out window."
+            f"Could not find window titled '{title}'. "
+            "Open that chat in KakaoTalk as a separate pop-out window (double-click it)."
         )
         return False
 
@@ -77,7 +91,7 @@ def send_self_dm(message: str) -> bool:
         pyautogui.press('enter')
         time.sleep(0.3)
 
-        logger.info(f"DM sent: {message[:100]}")
+        logger.info(f"DM sent to {title}: {message[:100]}")
         return True
     except Exception as e:
         logger.error(f"Failed to send DM: {e}")

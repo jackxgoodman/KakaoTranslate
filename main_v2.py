@@ -15,8 +15,8 @@ from winutil import enable_dpi_awareness
 enable_dpi_awareness()
 
 from config import BATCH_DMS, CHAT_NAME, OCR_ENGINE, POLL_INTERVAL, SELF_CHAT_TITLE  # noqa: E402
-from dm_format import build_dms, translate_messages  # noqa: E402
-from messenger import send_self_dm  # noqa: E402
+from dm_format import build_dms, dm_recipients, translate_messages  # noqa: E402
+from messenger import send_to_recipients  # noqa: E402
 from monitor_v2 import ChatMonitor  # noqa: E402
 from translator import backend_name  # noqa: E402
 
@@ -40,6 +40,7 @@ def main() -> None:
     logger.info(f"  Monitoring : {CHAT_NAME}")
     logger.info(f"  Poll every : {POLL_INTERVAL}s")
     logger.info(f"  Self-chat  : {SELF_CHAT_TITLE or '(not set)'}")
+    logger.info(f"  DMs go to  : {', '.join(dm_recipients()) or '(nobody set)'}")
     logger.info(f"  OCR engine : {OCR_ENGINE}")
     logger.info("  Press Ctrl+C to stop.")
     logger.info("=" * 60)
@@ -55,7 +56,7 @@ def main() -> None:
                 for msg, translation in zip(new_messages, translations):
                     logger.info(f"[{msg.sender or '?'}] {msg.text}" + (f"  →  {translation}" if translation else ""))
                 for dm in build_dms(new_messages, translations, BATCH_DMS):
-                    send_self_dm(dm)
+                    send_to_recipients(dm)
         except KeyboardInterrupt:
             logger.info("Stopped by user.")
             break

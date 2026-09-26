@@ -16,6 +16,12 @@ POLL_INTERVAL = 5
 # the window's title bar (usually your KakaoTalk display name on the English app).
 SELF_CHAT_TITLE = ""
 
+# Other people who should also receive the translated DMs (all versions).
+# For each person, open your 1:1 chat with them as its own window and add the
+# exact text from that window's title bar. The DMs are sent from your account.
+# Example: EXTRA_RECIPIENTS = ["홍길동"]
+EXTRA_RECIPIENTS = []
+
 # Pixels from the bottom of the self-chat window to click the input box (v1, v2).
 # Increase this if clicks land outside the input field.
 INPUT_BOX_Y_OFFSET = 50

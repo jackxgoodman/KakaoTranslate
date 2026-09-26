@@ -45,6 +45,17 @@ All versions translate with **NLLB-200** (better on casual Korean) or **Argos Tr
 
 The first run downloads the translation model (~2.5 GB for NLLB, ~150 MB for Argos).
 
+## Sending translations to other people too
+
+1. In KakaoTalk, double-click your 1:1 chat with that person so it opens as its **own window**, and leave it open.
+2. Add the exact text from that window's title bar to `config_local.py`:
+   ```python
+   EXTRA_RECIPIENTS = ["홍길동"]            # several people: ["홍길동", "Alex"]
+   ```
+3. Check it with `python test_v3.py` (section 1 should say the window is found). `python test_v3.py --send-all` also sends them a test DM.
+
+Every translation then goes to your My Chatroom and to each listed chat, sent from your account. The group chat being translated is never used as a recipient.
+
 ## Auto-start after reboot
 
 1. Set `AUTOSTART_VERSION = 3` (or 1 / 2) in `config_local.py`.
@@ -58,6 +69,7 @@ Logs: `kakaotranslate.log`, `kakaotranslate_v2.log`, `kakaotranslate_v3.log`. Re
 | Setting | Default | Meaning |
 |---|---|---|
 | `TRANSLATOR` | `"nllb"` | `"nllb"` (better, ~2.5 GB RAM) or `"argos"` (light) |
+| `EXTRA_RECIPIENTS` | `[]` | Chat window titles of other people who also get the DMs |
 | `BATCH_DMS` | `True` | One DM per check with all new messages |
 | `INCLUDE_OWN_MESSAGES` | `False` | Also translate your own messages |
 | `OCR_ENGINE` | `"auto"` | v2: `"windows"`, `"easyocr"` or `"auto"` |

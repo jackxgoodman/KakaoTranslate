@@ -4,6 +4,7 @@ Diagnostic script for v3 — run this before main_v3.py.
 Usage:
     python test_v3.py            # all checks, including a test DM
     python test_v3.py --no-send  # skip the DM
+    python test_v3.py --send-all # send the test DM to EXTRA_RECIPIENTS too
 Writes v3_clipboard_dump.txt with the raw copied chat text.
 """
 
@@ -17,7 +18,10 @@ from kakao_win32 import (
 
 enable_dpi_awareness()
 
-from config import BATCH_DMS, CHAT_NAME, RESTORE_CLIPBOARD, SELF_CHAT_TITLE, SEND_METHOD_V3  # noqa: E402
+from config import (  # noqa: E402
+    BATCH_DMS, CHAT_NAME, EXTRA_RECIPIENTS, RESTORE_CLIPBOARD, SELF_CHAT_TITLE, SEND_METHOD_V3,
+)
+from dm_format import dm_recipients  # noqa: E402
 
 _DUMP = Path(__file__).parent / 'v3_clipboard_dump.txt'
 
@@ -29,7 +33,9 @@ def test_windows():
         print("  No KakaoTalk windows found. Is KakaoTalk running?")
     for hwnd, title, cls in windows:
         print(f"  {title or '(no title)'!r:40} class={cls}")
-    for label, title in (("Group chat", CHAT_NAME), ("Self-chat", SELF_CHAT_TITLE)):
+    checks = [("Group chat", CHAT_NAME), ("Self-chat", SELF_CHAT_TITLE)]
+    checks += [("Extra recipient", t) for t in EXTRA_RECIPIENTS if t in dm_recipients()]
+    for label, title in checks:
         hwnd = find_window(title)
         print(f"\n  {label} ({title!r}): {'found' if hwnd else 'NOT FOUND'}")
         if not hwnd:
@@ -97,19 +103,23 @@ def test_translation_and_format():
 
 def test_send():
     print("── 4. DM send ──────────────────────────────────────────────────")
-    hwnd = find_window(SELF_CHAT_TITLE)
-    if not hwnd:
-        print(f"  Self-chat {SELF_CHAT_TITLE!r} not found.")
-        return
-    try:
-        sender = ChatSender(method=SEND_METHOD_V3, reader=ChatReader(restore_clipboard=RESTORE_CLIPBOARD))
-        ok = sender.send(hwnd, "[KakaoTranslate v3 test]\n[김민준] 언제가면되려나?\n→ When should I go?")
-        print(f"  {'Sent' if ok else 'Not sent'} using method: {sender.method}. Check My Chatroom "
-              "(the message should appear exactly once).")
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"  ERROR: {e}")
+    titles = dm_recipients() if '--send-all' in sys.argv else [SELF_CHAT_TITLE]
+    sender = ChatSender(method=SEND_METHOD_V3, reader=ChatReader(restore_clipboard=RESTORE_CLIPBOARD))
+    for title in titles:
+        hwnd = find_window(title)
+        if not hwnd:
+            print(f"  {title!r} not found.")
+            continue
+        try:
+            ok = sender.send(hwnd, "[KakaoTranslate v3 test]\n[김민준] 언제가면되려나?\n→ When should I go?")
+            print(f"  {title}: {'sent' if ok else 'not sent'} using method {sender.method} "
+                  "(it should appear exactly once).")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"  ERROR sending to {title}: {e}")
+    if '--send-all' not in sys.argv and len(dm_recipients()) > 1:
+        print("  (Extra recipients were skipped; add --send-all to test them too.)")
     print()
 
 

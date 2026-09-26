@@ -21,7 +21,7 @@ from config import (  # noqa: E402
     BATCH_DMS, CHAT_NAME, INCLUDE_OWN_MESSAGES, POLL_INTERVAL_V3, RESTORE_CLIPBOARD,
     SELF_CHAT_TITLE, SEND_METHOD_V3,
 )
-from dm_format import build_dms, translate_messages  # noqa: E402
+from dm_format import build_dms, dm_recipients, translate_messages  # noqa: E402
 from message_diff import find_new_messages  # noqa: E402
 from translator import backend_name  # noqa: E402
 
@@ -83,17 +83,19 @@ class Translator3:
         for msg, translation in zip(new, translations):
             logger.info(f"[{msg.sender}] {msg.text}" + (f"  →  {translation}" if translation else ""))
 
-        self_chat = find_window(SELF_CHAT_TITLE)
-        if not self_chat:
-            logger.warning(f"Self-chat window '{SELF_CHAT_TITLE}' not found — DM not sent.")
-            return
-        for dm in build_dms(new, translations, BATCH_DMS):
-            if self.sender.send(self_chat, dm):
-                logger.info(f"DM sent: {dm[:100]}")
+        dms = build_dms(new, translations, BATCH_DMS)
+        for title in dm_recipients():
+            hwnd = find_window(title)
+            if not hwnd:
+                logger.warning(f"Chat window '{title}' not found — open it as its own window. DM not sent there.")
+                continue
+            for dm in dms:
+                if self.sender.send(hwnd, dm):
+                    logger.info(f"DM sent to {title}: {dm[:100]}")
 
 
 def main() -> None:
-    if not CHAT_NAME or not SELF_CHAT_TITLE:
+    if not CHAT_NAME or not dm_recipients():
         logger.error("Set CHAT_NAME and SELF_CHAT_TITLE in config.py (or config_local.py) before running.")
         sys.exit(1)
 
@@ -101,7 +103,7 @@ def main() -> None:
     logger.info("KakaoTranslate v3  (direct window access, no OCR)")
     logger.info(f"  Monitoring : {CHAT_NAME}")
     logger.info(f"  Poll every : {POLL_INTERVAL_V3}s")
-    logger.info(f"  Self-chat  : {SELF_CHAT_TITLE}")
+    logger.info(f"  DMs go to  : {', '.join(dm_recipients())}")
     logger.info("  Press Ctrl+C to stop.")
     logger.info("=" * 60)
 

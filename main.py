@@ -5,7 +5,8 @@ from pathlib import Path
 
 from config import CHAT_NAME, POLL_INTERVAL, SELF_CHAT_TITLE
 from monitor import ChatMonitor
-from messenger import send_self_dm
+from dm_format import dm_recipients
+from messenger import send_to_recipients
 from translator import translate_batch_to_english
 
 _LOG_FILE = Path(__file__).parent / 'kakaotranslate.log'
@@ -37,6 +38,7 @@ def main() -> None:
     logger.info("  Make sure KakaoTalk is open with:")
     logger.info(f"    1. The group chat '{CHAT_NAME}' visible")
     logger.info(f"    2. My Chatroom ('{SELF_CHAT_TITLE}') open as a separate pop-out window")
+    logger.info(f"  DMs go to  : {', '.join(dm_recipients()) or '(nobody set)'}")
     logger.info("  Press Ctrl+C to stop.")
     logger.info("=" * 60)
 
@@ -50,7 +52,7 @@ def main() -> None:
                 for korean_text, english in zip(new_messages, translations):
                     logger.info(f"KO  {korean_text}")
                     logger.info(f"EN  {english}")
-                    send_self_dm(f"[번역] {english}")
+                    send_to_recipients(f"[번역] {english}")
         except KeyboardInterrupt:
             logger.info("Stopped by user.")
             break
