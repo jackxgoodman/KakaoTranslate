@@ -31,11 +31,13 @@ function memoryStore() {
   return { load: () => JSON.parse(JSON.stringify(state)), save: s => { state = JSON.parse(JSON.stringify(s)); } };
 }
 
-// Simulates the Shortcut: step 1, "translate" each item, step 2.
+// Simulates the Shortcut: step 1, "translate" each item, step 2 with the list of
+// translations (Shortcuts passes nothing when the list is empty and a plain
+// string when it has one item).
 function runShortcut(store, exportText) {
   const toTranslate = kt.handle(exportText, store).output;
   const translations = toTranslate.map(t => `EN(${t})`);
-  const step2 = kt.MARK + kt.SEP + translations.join(kt.SEP);
+  const step2 = translations.length === 0 ? null : translations.length === 1 ? translations[0] : translations;
   return { toTranslate, digest: kt.handle(step2, store).output };
 }
 
@@ -104,11 +106,11 @@ test("first run is limited to the most recent messages", () => {
 test("non-export input explains what to do", () => {
   const store = memoryStore();
   assert.deepStrictEqual(kt.handle("hello", store).output, []);
-  assert.match(kt.handle(kt.MARK + kt.SEP, store).output, /Couldn't find any messages/);
+  assert.match(kt.handle(null, store).output, /Couldn't find any messages/);
   assert.match(kt.handle(kt.MARK + kt.SEP, memoryStore()).output, /Export Chats/);
 });
 
-test("tolerates a newline or space after the marker", () => {
+test("still accepts the older marked-text layout", () => {
   const store = memoryStore();
   kt.handle(KOREAN_EXPORT, store);
   const out = kt.handle(`${kt.MARK}\n@@@A@@@B`, store).output;
@@ -119,5 +121,27 @@ test("tolerates a newline or space after the marker", () => {
 test("explains when the Shortcut passed a file name instead of the file", () => {
   const store = memoryStore();
   kt.handle("Talk_2026.10.14 15:12-1.txt", store);
-  assert.match(kt.handle(kt.MARK + kt.SEP, store).output, /file name/);
+  assert.match(kt.handle(null, store).output, /file name/);
+});
+
+test("a fresh export is never mistaken for translations", () => {
+  const store = memoryStore();
+  kt.handle(KOREAN_EXPORT, store);  // step 1, then the run is abandoned
+  const out = kt.handle(KOREAN_EXPORT + "2026. 10. 14. 오후 4:00, Y : 좋아\n", store).output;
+  assert.ok(Array.isArray(out));
+});
+
+test("an abandoned run older than 10 minutes is ignored", () => {
+  const store = memoryStore();
+  kt.handle(KOREAN_EXPORT, store, 0);
+  const out = kt.handle("Some translation", store, 11 * 60 * 1000).output;
+  assert.ok(Array.isArray(out));  // treated as a (bad) export, not as step 2
+});
+
+test("one translation passed as plain text lines up correctly", () => {
+  const store = memoryStore();
+  const later = KOREAN_EXPORT + "2026. 10. 14. 오후 4:00, 김민준 : 내일 봐요\n";
+  runShortcut(store, KOREAN_EXPORT);
+  assert.deepStrictEqual(kt.handle(later, store).output, ["내일 봐요"]);
+  assert.match(kt.handle("See you tomorrow", store).output, /내일 봐요\n→ See you tomorrow/);
 });

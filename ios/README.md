@@ -29,21 +29,44 @@ You need: **Scriptable** (free, App Store) and the built-in **Shortcuts** app.
 2. On your iPhone, open `ios/KakaoTranslate.js` from this repository on GitHub (signed in to GitHub in Safari or the GitHub app), tap **Raw**, then select all the text and **Copy**.
 3. In Scriptable, tap **+** (top right), paste the code, and tap the title at the top to rename the script to exactly **Kakao Translate**. Tap **Done**.
 
-## 2. Build the Shortcut (about 5 minutes)
+## 2. Make the Shortcut (about 5 minutes)
 
-Open **Shortcuts**, tap **+** to make a new shortcut, and name it **Kakao Translate**. Add these actions in order: tap **Search Actions** (bottom) and type the action's name.
+The shortcut has only five steps. Here is what the finished shortcut must contain — whichever way you build it, check it against this list:
 
-1. **Turn on the share menu.** Tap the **ⓘ** (or the name at the top → **Details**) and turn on **Show in Share Sheet**. A block "Receive … from Share Sheet" appears at the top: tap the blue input types, tap **Clear**, then select only **Files** and **Text**.
-2. **Text** — tap inside its box, then in the bar above the keyboard choose **Shortcut Input**.
-3. **Run Script** (Scriptable) — tap *Script* → **Kakao Translate**. Tap *Parameter* → choose **Text** (from step 2). Tap the arrow **>** on the action and make sure **Run In App** is **off**.
-4. **Repeat with Each** — it should read "Repeat with each item in **Script Output**". If not, tap the blue item and pick **Script Output**.
-5. **Translate Text** — drag it *inside* the repeat (between "Repeat with Each" and "End Repeat"). Make it read "Translate **Repeat Item** from **Korean** to **English**" (tap each blue word to set it; choose Korean, not *Detect Language*).
-6. **Combine Text** — below "End Repeat". Make it read "Combine **Repeat Results** with **Custom**", and type `@@@` in the custom box.
-7. **Text** — type `KT-TRANSLATIONS@@@` and then, right after it (no space), insert **Combined Text** from the bar above the keyboard.
-8. **Run Script** (Scriptable) — *Script* → **Kakao Translate**. *Parameter* → tap and choose **Select Variable**, then tap the **Text** action from step 7. **Run In App** off.
-9. **Quick Look** — it should show **Script Output**.
+| # | Action | Settings |
+|---|---|---|
+| 1 | **Receive** input from **Share Sheet** | Accepts **Files** and **Text** (appears when *Show in Share Sheet* is on) |
+| 2 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: **Shortcut Input** · *Run In App* off |
+| 3 | **Repeat with Each** | Repeat with each item in **Script Output** |
+| 3a | ↳ **Translate** (inside the repeat) | Translate **Repeat Item** from **Korean** to **English** |
+| 4 | **Run Script** (Scriptable), after *End Repeat* | Script: **Kakao Translate** · Parameter: **Repeat Results** · *Run In App* off |
+| 5 | **Quick Look** | Shows **Script Output** (from step 4) |
 
-Tap **Done**.
+### Option A — let iOS build it (iOS 27 with Apple Intelligence)
+
+1. Open **Shortcuts** and tap **+**. On the **Describe a Shortcut** screen, paste this:
+
+   > Show this shortcut in the share sheet and accept files and text. Run the Scriptable script "Kakao Translate" with the shortcut input as its parameter. Then repeat with each item in that script's output: translate the item from Korean to English. After the repeat, run the Scriptable script "Kakao Translate" again with the repeat results as its parameter. Finally, show the output of that second script with Quick Look.
+
+2. Review the steps it creates against the table above and fix anything that differs (tap a blue value to change it). The most common things to check: both scripts are **Kakao Translate**, the second one's parameter is **Repeat Results**, and Translate is set to **Korean → English** rather than *Detect Language*.
+3. Name the shortcut **Kakao Translate** and save it.
+
+### Option B — build it yourself in the editor
+
+If tapping **+** opens *Describe a Shortcut* and you'd rather build it by hand, switch to the editor from that screen, or make the editor the default: **Settings → Apps → Shortcuts → Open shortcuts to → Editor**.
+
+How to do the basic moves in the editor:
+- **Add an action:** use the action search field in the editor and type the action's name; tap the result to add it to the end.
+- **Change a value:** tap the blue word in the action (for example *Script*, *Parameter*, or a language) and pick from the list. To use a result from an earlier step, choose it from the variable list that appears (e.g. **Shortcut Input**, **Script Output**, **Repeat Results**).
+- **Move an action:** touch and hold it, then drag.
+
+Steps:
+1. Name the shortcut **Kakao Translate**. Open its settings (**Details**, or the **ⓘ** / settings button, or the menu under the shortcut's name) and turn on **Show in Share Sheet**. A *Receive … from Share Sheet* block appears at the top — tap its input types and leave only **Files** and **Text** selected.
+2. Add Scriptable's **Run Script**. Set *Script* to **Kakao Translate** and *Parameter* to **Shortcut Input**. If the action has a *Run In App* option (sometimes behind a **>** or *Show More*), make sure it's **off**.
+3. Add **Repeat with Each** and set it to **Script Output** (it usually picks this automatically).
+4. Add **Translate** (Apple's *Translate Text* action) and drag it **inside** the repeat, between *Repeat with Each* and *End Repeat*. Set it to translate **Repeat Item** from **Korean** to **English**.
+5. Add another Scriptable **Run Script** below *End Repeat*. *Script*: **Kakao Translate**, *Parameter*: **Repeat Results**, *Run In App* off.
+6. Add **Quick Look**; it should show **Script Output**.
 
 ## 3. Use it
 
@@ -61,6 +84,8 @@ Next time you do the same thing, you'll only see what's new since then. It works
 |---|---|
 | "Couldn't find any messages in that export" | The export format is different from what the script expects. Send a few lines of the exported file (replace the names) so it can be adjusted. |
 | "Start the Shortcut from KakaoTalk's Export Chats share menu" | The script ran without a chat. Start from KakaoTalk as in step 3. |
-| Nothing translated / "(not translated)" | Check step 5 is *inside* the repeat and step 6 uses **Repeat Results**. |
-| Kakao Translate isn't in the share menu | Step 2.1: Show in Share Sheet must be on and **Files** must be selected. |
+| Nothing translated / "(not translated)" | Check the table above: Translate must be *inside* the repeat, and the second Run Script's parameter must be **Repeat Results**. |
+| "The Shortcut passed the file name … instead of its contents" | Add a **Text** action containing **Shortcut Input** right after the Receive block, and set the first Run Script's parameter to that **Text**. |
+| Kakao Translate isn't in the share menu | Show in Share Sheet must be on, and **Files** must be one of the accepted input types. |
+| A step here doesn't match your screen | Send a screenshot of the Shortcuts editor (and your iOS version, from Settings → General → About) so these instructions can be corrected. |
 | Want to start over | Open Scriptable, tap **Kakao Translate**, choose **Reset**. |

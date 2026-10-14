@@ -124,14 +124,36 @@ function buildDigest(pending, translations) {
 
 // ── Main logic (independent of Scriptable, so it can be tested) ───────────
 
-function handle(param, store) {
+const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
+
+const asText = param => (Array.isArray(param) ? param.join("\n") : String(param == null ? "" : param));
+
+function asList(param) {
+  if (param == null) return [];
+  if (Array.isArray(param)) return param.map(t => String(t).trim());
+  const s = String(param).trim();
+  return s ? [s] : [];
+}
+
+// Older Shortcut layout: "KT-TRANSLATIONS@@@one@@@two"
+function markedTranslations(param) {
+  if (typeof param !== "string" || !param.trimStart().startsWith(MARK)) return null;
+  const rest = param.trimStart().slice(MARK.length).replace(/^\s*@@@/, "");
+  return rest.trim() ? rest.split(SEP).map(t => t.trim()) : [];
+}
+
+function handle(param, store, now = Date.now()) {
   const state = store.load();
   state.chats = state.chats || {};
+  const pending = state.pending;
+  const awaiting = !!(pending && pending.awaiting && now - (pending.createdAt || 0) < PENDING_MAX_AGE_MS);
 
-  if (typeof param === "string" && param.trimStart().startsWith(MARK)) {
-    const rest = param.trimStart().slice(MARK.length).replace(/^\s*@@@/, "");
-    const translations = rest.trim() ? rest.split(SEP).map(t => t.trim()) : [];
-    const pending = state.pending;
+  // Step 2: the Shortcut passes back the translations (anything that isn't a chat export).
+  let translations = markedTranslations(param);
+  if (translations === null && awaiting && !parseExport(asText(param)).messages.length) {
+    translations = asList(param);
+  }
+  if (translations !== null) {
     if (!pending) return { output: "Start the Shortcut from KakaoTalk's Export Chats share menu." };
     const output = buildDigest(pending, translations);
     if (!pending.error) state.chats[pending.title] = { anchor: pending.anchor };
@@ -140,14 +162,17 @@ function handle(param, store) {
     return { output };
   }
 
-  const raw = Array.isArray(param) ? param.join("\n") : String(param || "");
+  // Step 1: the Shortcut passes the exported chat.
+  const raw = asText(param);
   const { title, messages } = parseExport(raw);
   if (!messages.length) {
     const gotFileName = /^[^\n]*\.(txt|zip)\s*$/i.test(raw.trim());
     state.pending = {
+      awaiting: true,
+      createdAt: now,
       error: gotFileName
         ? `The Shortcut passed the file name ("${raw.trim()}") instead of its contents. ` +
-          "In the Shortcut, make sure the first Text action contains Shortcut Input."
+          "Add a Text action containing Shortcut Input before the first Run Script, and pass that Text instead."
         : "Couldn't find any messages in that export. Use Export Chats → Send text only.",
     };
     store.save(state);
@@ -174,6 +199,8 @@ function handle(param, store) {
   }
   const fresh = messages.slice(start);
   state.pending = {
+    awaiting: true,
+    createdAt: now,
     title: chatKey,
     note,
     messages: fresh,
@@ -198,7 +225,10 @@ if (typeof Script !== "undefined") (async () => {
   };
 
   if (config.runsFromShortcut) {
-    Script.setShortcutOutput(handle(args.shortcutParameter, store).output);
+    let param = args.shortcutParameter;
+    const path = typeof param === "string" ? param.trim() : "";
+    if (/^\/.*\.txt$/i.test(path) && fm.fileExists(path)) param = fm.readString(path);
+    Script.setShortcutOutput(handle(param, store).output);
     Script.complete();
   } else {
     const alert = new Alert();
