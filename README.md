@@ -17,6 +17,8 @@ Watches a KakaoTalk group chat on a Windows PC, translates new Korean messages i
 | **v2** `main_v2.py` | Captures the window, OCRs it, and reads the visual layout (bubbles, names, profile pictures, grey reply quotes) | Works with any app version that looks like KakaoTalk | OCR misreads some Korean; needs a model or the Windows Korean OCR pack |
 | **v1** `main.py` | Screenshot + OCR, Korean text only, no sender names | Simplest | Least accurate |
 
+**No computer?** [`ios/`](ios/README.md) has an iPhone Shortcut that translates the new messages on demand from a KakaoTalk chat export — nothing runs in the background.
+
 All versions translate with **NLLB-200** (better on casual Korean) or **Argos Translate** (lighter) — see `TRANSLATOR` in `config.py`.
 
 ## Setup
@@ -93,4 +95,5 @@ Logs: `kakaotranslate.log`, `kakaotranslate_v2.log`, `kakaotranslate_v3.log`. Re
 `chat_parser.py`, `message_diff.py` and `chat_layout.py` are pure Python and tested on any OS:
 ```
 python -m unittest discover -s tests -t .
+node --test ios/test_kakao_translate.js
 ```
