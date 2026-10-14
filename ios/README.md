@@ -1,6 +1,6 @@
 # KakaoTranslate for iPhone (no computer needed)
 
-Whenever you want to catch up, export the chat from KakaoTalk and send it to the **Kakao Translate** Shortcut. It shows only the messages since your last run, each with an English translation:
+Whenever you want to catch up, export the chat from KakaoTalk (it arrives as an email attachment) and share that file to the **Kakao Translate** Shortcut. It shows only the messages since your last run, each with an English translation:
 
 ```
 스터디 그룹 — 3 new messages
@@ -70,9 +70,14 @@ Steps:
 
 ## 3. Use it
 
-1. In KakaoTalk, open the group chat → **☰** (top right) → **⚙** (bottom right) → **Export Chats** → **Send text only** (Korean: 대화 내용 내보내기 → 텍스트만 보내기).
-2. In the share menu, tap **Kakao Translate** (scroll the app row or tap **More** if you don't see it).
-3. The first time, allow the Shortcut to run the script and to use Translate. Read the translations, then swipe the preview away.
+KakaoTalk on iPhone exports a chat as an email attachment (a `.txt` file), so the file goes through Mail on its way to the Shortcut.
+
+1. In KakaoTalk, open the group chat → **☰** (top right) → **⚙** (bottom right) → **Export Chats** → **Send text only** (Korean: 대화 내용 내보내기 → 텍스트만 보내기). A Mail draft opens with the chat attached.
+2. **Try the quick way first:** touch and hold the attachment in the draft. If a menu with **Share** appears, tap it, choose **Kakao Translate**, and when you're done, cancel the draft (**Cancel → Delete Draft**).
+3. **If there's no Share option in the draft:** enter your own email address in **To** and tap **Send**. Open that email in Mail, touch and hold the attachment (or tap it, then tap the **Share** button), and choose **Kakao Translate**.
+4. The first time, allow the Shortcut to run the script and to use Translate. Read the translations, then swipe the preview away.
+
+Tip: if you save the attachment with **Save to Files** instead, you can share it to Kakao Translate later from the **Files** app (touch and hold the file → **Share**).
 
 Next time you do the same thing, you'll only see what's new since then. It works for several chats; each remembers its own place.
 
@@ -83,9 +88,9 @@ Next time you do the same thing, you'll only see what's new since then. It works
 | What you see | Fix |
 |---|---|
 | "Couldn't find any messages in that export" | The export format is different from what the script expects. Send a few lines of the exported file (replace the names) so it can be adjusted. |
-| "Start the Shortcut from KakaoTalk's Export Chats share menu" | The script ran without a chat. Start from KakaoTalk as in step 3. |
+| "Export the chat in KakaoTalk … and share the .txt attachment" | The script ran without a chat. Share the exported `.txt` attachment to the Shortcut as in section 3. |
 | Nothing translated / "(not translated)" | Check the table above: Translate must be *inside* the repeat, and the second Run Script's parameter must be **Repeat Results**. |
 | "The Shortcut passed the file name … instead of its contents" | Add a **Text** action containing **Shortcut Input** right after the Receive block, and set the first Run Script's parameter to that **Text**. |
-| Kakao Translate isn't in the share menu | Show in Share Sheet must be on, and **Files** must be one of the accepted input types. |
+| Kakao Translate isn't in the share menu | Show in Share Sheet must be on, and **Files** must be one of the accepted input types. In the share menu, scroll to the bottom and tap **Edit Actions** to add it if it's still hidden. |
 | A step here doesn't match your screen | Send a screenshot of the Shortcuts editor (and your iOS version, from Settings → General → About) so these instructions can be corrected. |
 | Want to start over | Open Scriptable, tap **Kakao Translate**, choose **Reset**. |

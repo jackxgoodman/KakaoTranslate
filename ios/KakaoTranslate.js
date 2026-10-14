@@ -154,7 +154,7 @@ function handle(param, store, now = Date.now()) {
     translations = asList(param);
   }
   if (translations !== null) {
-    if (!pending) return { output: "Start the Shortcut from KakaoTalk's Export Chats share menu." };
+    if (!pending) return { output: "Export the chat in KakaoTalk (Export Chats → Send text only) and share the .txt attachment to the Kakao Translate Shortcut." };
     const output = buildDigest(pending, translations);
     if (!pending.error) state.chats[pending.title] = { anchor: pending.anchor };
     delete state.pending;
@@ -233,8 +233,8 @@ if (typeof Script !== "undefined") (async () => {
   } else {
     const alert = new Alert();
     alert.title = "Kakao Translate";
-    alert.message = "Run the \"Kakao Translate\" Shortcut from KakaoTalk: chat → ⚙ → Export Chats → " +
-      "Send text only → Kakao Translate.\n\nReset forgets where you left off in every chat.";
+    alert.message = "In KakaoTalk: chat → ☰ → ⚙ → Export Chats → Send text only. Then share the .txt " +
+      "attachment from the email to the \"Kakao Translate\" Shortcut.\n\nReset forgets where you left off in every chat.";
     alert.addDestructiveAction("Reset");
     alert.addCancelAction("Close");
     if ((await alert.present()) === 0) {
