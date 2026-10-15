@@ -103,10 +103,10 @@ test("first run is limited to the most recent messages", () => {
   assert.strictEqual(run.toTranslate[29], "메시지 99");
 });
 
-test("non-export input explains what to do", () => {
+test("a screen with no chat messages says so", () => {
   const store = memoryStore();
-  assert.deepStrictEqual(kt.handle("hello", store).output, []);
-  assert.match(kt.handle(null, store).output, /Couldn't find any messages/);
+  assert.deepStrictEqual(kt.handle("3:47\n85\n5G", store).output, []);
+  assert.match(kt.handle(null, store).output, /No chat messages found/);
   assert.match(kt.handle(kt.MARK + kt.SEP, memoryStore()).output, /Export Chats/);
 });
 
@@ -144,4 +144,128 @@ test("one translation passed as plain text lines up correctly", () => {
   runShortcut(store, KOREAN_EXPORT);
   assert.deepStrictEqual(kt.handle(later, store).output, ["내일 봐요"]);
   assert.match(kt.handle("See you tomorrow", store).output, /내일 봐요\n→ See you tomorrow/);
+});
+
+// ── Screenshot text (what "Extract Text from Image" returns) ──────────────
+
+// Modelled on a real KakaoTalk group chat screen; names replaced.
+const SCREEN_1 = `3:47
+5G
+85
+스터디 그룹
+38
+찬성
+17
+10:47 AM
+김민준
+언제가면되려나?
+17
+10:47 AM
+이서연
+LA를 안가봐서 못해주겠습니다
+17
+10:47 AM
+Y
+고마워 미리
+17
+10:47 AM
+박도윤
+Reply to 이서연
+LA를 안가봐서 못해주겠습니다
+valid
+18
+10:47 AM
+Alex
+Reply to 이서연
+National Galbi Day
+Every day is national galbi day for me
+18
+10:49 AM
+♥ 2 3 1
+Enter a message
+Send`;
+
+const SCREEN_2 = `스터디 그룹
+38
+최유나(Yuna)
+9/24-9/25 치폴레 이벤트 있는 것 같아서 공
+유 드려요 ㅎㅎ
+23
+10:23 AM
+MK
+쿼사디아 매우 좋아하긴 하는데...
+26
+내셔널 쿼사디아 데이가 있는줄은 꿈에
+도 몰랐네
+27
+10:24 AM
+Y
+허얼 조져야지
+27
+10:25 AM
+1
+10:26 AM
+나도 갈게`;
+
+function runScreen(text) {
+  const store = memoryStore();
+  const toTranslate = kt.handle(text, store).output;
+  const translations = toTranslate.map(t => `EN(${t})`);
+  const step2 = translations.length === 0 ? null : translations.length === 1 ? translations[0] : translations;
+  return { toTranslate, digest: kt.handle(step2, store).output };
+}
+
+test("screen text: senders, replies and noise", () => {
+  const groups = kt.parseScreen(SCREEN_1);
+  assert.deepStrictEqual(groups.map(g => [g.sender, g.text, g.replyTo]), [
+    ["", "찬성", ""],
+    ["김민준", "언제가면되려나?", ""],
+    ["이서연", "LA를 안가봐서 못해주겠습니다", ""],
+    ["Y", "고마워 미리", ""],
+    ["박도윤", "valid", "이서연"],
+    ["Alex", "Every day is national galbi day for me", "이서연"],
+  ]);
+});
+
+test("screen text: wrapped lines and several bubbles are merged per sender", () => {
+  const groups = kt.parseScreen(SCREEN_2);
+  assert.deepStrictEqual(groups.map(g => [g.sender, g.text]), [
+    ["최유나(Yuna)", "9/24-9/25 치폴레 이벤트 있는 것 같아서 공 유 드려요 ㅎㅎ"],
+    ["MK", "쿼사디아 매우 좋아하긴 하는데... 내셔널 쿼사디아 데이가 있는줄은 꿈에 도 몰랐네"],
+    ["Y", "허얼 조져야지"],
+    ["?", "나도 갈게"],  // after a timestamp with no name: yours, or the same person later
+  ]);
+});
+
+test("screen text: full Shortcut round trip gives an easy-to-read list", () => {
+  const { toTranslate, digest } = runScreen(SCREEN_1);
+  assert.deepStrictEqual(toTranslate, ["찬성", "언제가면되려나?", "LA를 안가봐서 못해주겠습니다", "고마워 미리"]);
+  assert.strictEqual(digest, [
+    "[… earlier]", "찬성", "→ EN(찬성)", "",
+    "[김민준]", "언제가면되려나?", "→ EN(언제가면되려나?)", "",
+    "[이서연]", "LA를 안가봐서 못해주겠습니다", "→ EN(LA를 안가봐서 못해주겠습니다)", "",
+    "[Y]", "고마워 미리", "→ EN(고마워 미리)", "",
+    "[박도윤] ↩ replying to 이서연", "valid", "",
+    "[Alex] ↩ replying to 이서연", "Every day is national galbi day for me",
+  ].join("\n"));
+});
+
+test("screen text: a single Korean message round trip", () => {
+  const { digest } = runScreen("김민준\n언제가면되려나?\n10:47 AM");
+  assert.strictEqual(digest, "[김민준]\n언제가면되려나?\n→ EN(언제가면되려나?)");
+});
+
+test("names: shapes that are and aren't names", () => {
+  for (const n of ["김민준", "이서연", "최유나(Yuna)", "김지은 Jenny Kim", "Alex", "MK", "Y", "Sonny K"]) {
+    assert.ok(kt.looksLikeName(n), n);
+  }
+  for (const n of ["찬성", "이거", "고마워", "좋아", "Yes", "Thanks", "valid", "언제가면되려나?", "ok"]) {
+    assert.ok(!kt.looksLikeName(n), n);
+  }
+});
+
+test("screen text is never mistaken for step 2", () => {
+  const store = memoryStore();
+  kt.handle("김민준\n언제가면되려나?\n10:47 AM", store);  // step 1 expecting 1 translation, then abandoned
+  assert.ok(Array.isArray(kt.handle(SCREEN_1, store).output));
 });
