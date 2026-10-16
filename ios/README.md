@@ -41,7 +41,7 @@ If you already made the Back Tap shortcut (*Take Screenshot → Extract Text fro
 | 2 | **Extract Text from Image** | Input: **Screenshot** |
 | 3 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: the text from step 2 (shown as **Text from Image** or **Extracted Text**, with the same icon as step 2) — **not** *Repeat Item* · *Run In App* off |
 | 4 | **Repeat with Each** | Repeat with each item in **Script Output** |
-| 4a | ↳ **Translate Text** (inside the repeat) | Translate **Repeat Item** from **Korean** to **English** |
+| 4a | ↳ **Translate Text** (inside the repeat) | Translate **Repeat Item** (not *Text from Image*) from **Korean** to **English** |
 | 5 | **Run Script** (Scriptable), after *End Repeat* | Script: **Kakao Translate** · Parameter: **Repeat Results** · *Run In App* off |
 | 6 | **Quick Look** | Input: **Script Output** from step 5 (the `{ }` Scriptable icon — not the Translate icon) |
 

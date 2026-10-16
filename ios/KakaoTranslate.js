@@ -394,11 +394,21 @@ if (typeof Script !== "undefined") (async () => {
     },
   };
 
-  if (config.runsFromShortcut) {
-    let param = args.shortcutParameter;
-    const path = typeof param === "string" ? param.trim() : "";
-    if (/^\/.*\.txt$/i.test(path) && fm.fileExists(path)) param = fm.readString(path);
-    Script.setShortcutOutput(runStep(param, store));
+  // Started by Shortcuts' Run Script? Scriptable sets config.runsInApp only
+  // when the script is opened in the app itself; a Shortcut may also pass a
+  // parameter while running it in the app.
+  const fromShortcut = !config.runsInApp || (args.shortcutParameter !== undefined && args.shortcutParameter !== null);
+  if (fromShortcut) {
+    let output;
+    try {
+      let param = args.shortcutParameter;
+      const path = typeof param === "string" ? param.trim() : "";
+      if (/^\/.*\.txt$/i.test(path) && fm.fileExists(path)) param = fm.readString(path);
+      output = runStep(param, store);
+    } catch (e) {
+      output = `Kakao Translate hit a problem: ${(e && e.message) || e}`;
+    }
+    Script.setShortcutOutput(output);
     Script.complete();
   } else {
     const alert = new Alert();

@@ -299,3 +299,64 @@ test("an unexpected error becomes a readable message", () => {
   const broken = { load: () => { throw new Error("disk full"); }, save: () => {} };
   assert.match(kt.runStep("anything", broken), /hit a problem: disk full/);
 });
+
+// ── The Scriptable glue, run the way Shortcuts runs it ────────────────────
+
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const SOURCE = fs.readFileSync(path.join(__dirname, "KakaoTranslate.js"), "utf8");
+
+// Runs the script once in a fake Scriptable environment; resolves with what it gave Shortcuts.
+function runInScriptable({ param, runsInApp = false, files = {}, alertChoice = 1 }) {
+  return new Promise(resolve => {
+    const result = { output: undefined, completed: false, alerted: false };
+    const sandbox = {
+      args: { shortcutParameter: param },
+      config: { runsInApp, runsWithSiri: !runsInApp },  // note: no runsFromShortcut — Scriptable has none
+      Script: {
+        setShortcutOutput: v => { result.output = v; },
+        complete: () => { result.completed = true; setImmediate(() => resolve(result)); },
+      },
+      FileManager: {
+        local: () => ({
+          documentsDirectory: () => "/docs",
+          joinPath: (a, b) => `${a}/${b}`,
+          fileExists: p => p in files || p === "/docs/KakaoTranslate",
+          readString: p => files[p],
+          writeString: (p, s) => { files[p] = s; },
+          createDirectory: () => {},
+        }),
+      },
+      Alert: class {
+        addDestructiveAction() {}
+        addCancelAction() {}
+        present() { result.alerted = true; return Promise.resolve(alertChoice); }
+      },
+      setImmediate,
+    };
+    vm.runInNewContext(SOURCE, sandbox);
+  });
+}
+
+test("Scriptable glue: a Shortcut run returns values (no 'completed without outputting')", async () => {
+  const files = {};
+  const step1 = await runInScriptable({ param: "김민준\n언제가면되려나?\n10:47 AM", files });
+  assert.ok(step1.completed);
+  assert.deepStrictEqual(Array.from(step1.output), ["언제가면되려나?"]);
+  const step2 = await runInScriptable({ param: "When should I go?", files });
+  assert.strictEqual(step2.output, "[김민준]\n언제가면되려나?\n→ When should I go?");
+});
+
+test("Scriptable glue: a Shortcut run with no input still outputs something", async () => {
+  const run = await runInScriptable({ param: null });
+  assert.ok(run.completed);
+  assert.ok(run.output && run.output.length > 0);
+  assert.ok(!run.alerted);
+});
+
+test("Scriptable glue: opening the script in the app shows the menu", async () => {
+  const run = await runInScriptable({ param: null, runsInApp: true });
+  assert.ok(run.alerted);
+  assert.ok(run.completed);
+});
