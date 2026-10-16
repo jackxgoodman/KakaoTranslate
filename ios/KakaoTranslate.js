@@ -268,7 +268,8 @@ function buildDigest(pending, translations) {
 
 // ── Main logic (independent of Scriptable, so it can be tested) ───────────
 
-const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
+const PENDING_MAX_AGE_MS = 2 * 60 * 1000;  // step 2 always follows step 1 within seconds
+const MAX_PENDING = 5;
 
 const asText = param => (Array.isArray(param) ? param.join("\n") : String(param == null ? "" : param));
 
@@ -286,58 +287,82 @@ function markedTranslations(param) {
   return rest.trim() ? rest.split(SEP).map(t => t.trim()) : [];
 }
 
+// Is this what the Shortcut passes in step 1 (screen text, an export, or
+// nothing at all) rather than step 2's translations? Decided from the
+// content alone, so a leftover or simultaneous run can't confuse the steps:
+// screen text always has bare time lines (status bar, timestamps) and many
+// lines; translations never do.
+function isStepOneInput(param) {
+  if (markedTranslations(param) !== null) return false;
+  const items = Array.isArray(param) ? param.map(String) : asText(param).split("\n");
+  const lines = items.map(l => l.trim()).filter(Boolean);
+  if (parseExport(items.join("\n")).messages.length) return true;
+  if (lines.some(l => SCREEN_TIME.test(l))) return true;
+  if (!Array.isArray(param) && lines.length >= 8) return true;
+  if (lines.length === 1 && /\.(txt|zip)$/i.test(lines[0])) return true;
+  return false;
+}
+
+function livePendings(state, now) {
+  const list = state.pendings || (state.pending ? [state.pending] : []);
+  delete state.pending;  // older single-run layout
+  return list.filter(p => p && now - (p.createdAt || 0) < PENDING_MAX_AGE_MS);
+}
+
+function savePending(state, store, pending, now) {
+  state.pendings = livePendings(state, now).concat(pending).slice(-MAX_PENDING);
+  store.save(state);
+}
+
+const LOST_TRACK = "Kakao Translate lost track of this run — it may have been started twice at once. Please run it again.";
+const NO_TEXT = "The script received no text. In the Shortcut, set the first Run Script's input to the " +
+  "text from Extract Text (not Repeat Item), and check it comes right after Extract Text.";
+
 function handle(param, store, now = Date.now()) {
   const state = store.load();
   state.chats = state.chats || {};
-  const pending = state.pending;
-  const awaiting = !!(pending && pending.awaiting && now - (pending.createdAt || 0) < PENDING_MAX_AGE_MS);
+  const raw = asText(param);
 
-  // Step 2: the Shortcut passes back the translations — nothing (none needed),
-  // a list, or a single short text — right after step 1.
-  let translations = markedTranslations(param);
-  if (translations === null && awaiting && !parseExport(asText(param)).messages.length) {
-    const shortText = typeof param === "string" && pending.expected <= 1 &&
-      param.split("\n").filter(l => l.trim()).length < 4;
-    if (param == null || param === "" || Array.isArray(param) || shortText) translations = asList(param);
-  }
-  if (translations !== null) {
-    if (!pending) return { output: "Export the chat in KakaoTalk (Export Chats → Send text only) and share the .txt attachment to the Kakao Translate Shortcut." };
+  // Step 2: the Shortcut passes back the translations.
+  if (!isStepOneInput(param)) {
+    const translations = markedTranslations(param) || asList(param);
+    const pendings = livePendings(state, now);
+    const fits = p => (p.expected || 0) === translations.length || ((p.expected || 0) === 0 && translations.length <= 1);
+    const pending = pendings.slice().reverse().find(fits);
+    if (!pending) {
+      state.pendings = pendings;
+      store.save(state);
+      if (!raw.trim()) {
+        // Nothing passed and no run in progress: most likely the first Run Script's input is wrong.
+        savePending(state, store, { awaiting: true, createdAt: now, expected: 0, error: NO_TEXT }, now);
+        return { output: [] };
+      }
+      return { output: LOST_TRACK };
+    }
     const output = buildDigest(pending, translations);
     if (!pending.error && pending.mode !== "screen") state.chats[pending.title] = { anchor: pending.anchor };
-    delete state.pending;
+    state.pendings = pendings.filter(p => p !== pending);
     store.save(state);
     return { output };
   }
 
   // Step 1: the Shortcut passes screenshot text or an exported chat.
-  const raw = asText(param);
-  if (!raw.trim()) {
-    state.pending = {
-      awaiting: true, createdAt: now, expected: 0,
-      error: "The script received no text. In the Shortcut, set the first Run Script's input to the " +
-        "text from Extract Text (not Repeat Item), and check it comes right after Extract Text.",
-    };
-    store.save(state);
-    return { output: [] };
-  }
   const { title, messages } = parseExport(raw);
   if (!messages.length) {
     if (/^[^\n]*\.(txt|zip)\s*$/i.test(raw.trim())) {
-      state.pending = {
+      savePending(state, store, {
         awaiting: true, createdAt: now, expected: 0,
         error: `The Shortcut passed the file name ("${raw.trim()}") instead of its contents. ` +
           "Add a Text action containing Shortcut Input before the first Run Script, and pass that Text instead.",
-      };
-      store.save(state);
+      }, now);
       return { output: [] };
     }
     const groups = parseScreen(raw);
     const toTranslate = groups.filter(g => !g.divider && SYLLABLE.test(g.text)).map(g => g.text);
-    state.pending = {
+    savePending(state, store, {
       mode: "screen", awaiting: true, createdAt: now, expected: toTranslate.length, groups,
       raw: SHOW_SCREEN_TEXT ? raw : "",
-    };
-    store.save(state);
+    }, now);
     return { output: toTranslate };
   }
 
@@ -360,7 +385,7 @@ function handle(param, store, now = Date.now()) {
       : `(First time for this chat — showing the last ${messages.length - start}.)`;
   }
   const fresh = messages.slice(start);
-  state.pending = {
+  savePending(state, store, {
     awaiting: true,
     createdAt: now,
     expected: fresh.filter(m => SYLLABLE.test(m.text)).length,
@@ -368,8 +393,7 @@ function handle(param, store, now = Date.now()) {
     note,
     messages: fresh,
     anchor: messages.slice(-ANCHOR_LEN).map(keyOf),
-  };
-  store.save(state);
+  }, now);
   return { output: fresh.filter(m => SYLLABLE.test(m.text)).map(m => m.text) };
 }
 
@@ -386,9 +410,7 @@ function runStep(param, store, now = Date.now()) {
   } catch (e) {
     const message = `Kakao Translate hit a problem: ${(e && e.message) || e}`;
     try {
-      const state = store.load();
-      state.pending = { awaiting: true, createdAt: now, expected: 0, error: message };
-      store.save(state);
+      savePending(store.load(), store, { awaiting: true, createdAt: now, expected: 0, error: message }, now);
     } catch (_) { /* storage itself failed; the message below still shows */ }
     return message;
   }

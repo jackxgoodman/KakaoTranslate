@@ -107,7 +107,7 @@ test("a screen with no chat messages says so", () => {
   const store = memoryStore();
   assert.deepStrictEqual(kt.handle("3:47\n85\n5G", store).output, []);
   assert.match(kt.handle(null, store).output, /No chat messages found/);
-  assert.match(kt.handle(kt.MARK + kt.SEP, memoryStore()).output, /Export Chats/);
+  assert.match(kt.handle(kt.MARK + kt.SEP, memoryStore()).output, /lost track/);
 });
 
 test("still accepts the older marked-text layout", () => {
@@ -131,11 +131,11 @@ test("a fresh export is never mistaken for translations", () => {
   assert.ok(Array.isArray(out));
 });
 
-test("an abandoned run older than 10 minutes is ignored", () => {
+test("an abandoned run older than 2 minutes is ignored", () => {
   const store = memoryStore();
   kt.handle(KOREAN_EXPORT, store, 0);
-  const out = kt.handle("Some translation", store, 11 * 60 * 1000).output;
-  assert.ok(Array.isArray(out));  // treated as a (bad) export, not as step 2
+  const out = kt.handle("Some translation", store, 3 * 60 * 1000).output;
+  assert.match(out, /lost track/);
 });
 
 test("one translation passed as plain text lines up correctly", () => {
@@ -417,4 +417,38 @@ test("screen text: the date shows as a divider in the results and isn't translat
 test("screen text: Korean date lines too", () => {
   const groups = kt.parseScreen("김민준\n안녕\n10:00\n2026년 10월 16일 금요일 >\n김민준\n좋아요\n00:15");
   assert.deepStrictEqual(groups.filter(g => g.divider).map(g => g.divider), ["2026년 10월 16일 금요일"]);
+});
+
+// ── Runs that overlap, are left over, or arrive in an unusual shape ───────
+
+test("two runs started at once each get their own result", () => {
+  const store = memoryStore();
+  const a = kt.runStep("김민준\n언제가면되려나?\n10:47 AM", store, 1000);
+  const b = kt.runStep("이서연\n내일 봐요\n좋아요\n10:48 AM", store, 1500);
+  assert.deepStrictEqual(a, ["언제가면되려나?"]);
+  assert.deepStrictEqual(b, ["내일 봐요 좋아요"]);
+  assert.match(kt.runStep("See you tomorrow, good", store, 2000), /\[이서연\]/);
+  assert.match(kt.runStep("When should I go?", store, 2500), /\[김민준\]\n언제가면되려나\?\n→ When should I go\?/);
+});
+
+test("a run interrupted before step 2 doesn't spoil the next run", () => {
+  const store = memoryStore();
+  kt.runStep("김민준\n언제가면되려나?\n10:47 AM", store, 0);  // step 1, then the Shortcut was cancelled
+  const step1 = kt.runStep(SCREEN_1, store, 30 * 1000);
+  assert.strictEqual(step1.length, 4);
+  const out = kt.runStep(step1.map(t => `EN(${t})`), store, 31 * 1000);
+  assert.match(out, /\[Y\]\n고마워 미리\n→ EN\(고마워 미리\)/);
+});
+
+test("screen text arriving as a list of lines is still step 1", () => {
+  const store = memoryStore();
+  kt.runStep("김민준\n언제가면되려나?\n10:47 AM", store, 0);  // leftover run waiting for 1 translation
+  const step1 = kt.runStep(SCREEN_1.split("\n"), store, 1000);
+  assert.strictEqual(step1.length, 4);
+});
+
+test("a step 2 with nothing to match shows a message, not the placeholder", () => {
+  const out = kt.runStep("Confirm", memoryStore());
+  assert.strictEqual(typeof out, "string");
+  assert.match(out, /lost track/);
 });

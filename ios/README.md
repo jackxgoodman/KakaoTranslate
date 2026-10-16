@@ -69,6 +69,7 @@ Open the group chat in KakaoTalk and double-tap the back of the phone. Read the 
 | Nothing appears after double-tapping | Run the shortcut once from the Shortcuts app and allow everything (section 2, "Then", step 1). Turn on Settings → Notifications → **Shortcuts** so errors show. If still nothing, replace **Quick Look** with **Show Result** (input **Script Output**). |
 | "Script completed without presenting UI…" in red above the first Run Script, or "The script received no text" | The first Run Script's input is wrong (often *Repeat Item*, which is empty outside the repeat). Tap it and choose the text from **Extract Text**. Also re-copy the latest script. |
 | A Scriptable pop-up appears each time (twice per run) | Tap the **>** on each Run Script action and turn **Show When Run** off. |
+| "Kakao Translate lost track of this run" | The Shortcut was probably started twice at once (e.g. Back Tap registered twice). Just run it again. |
 | "No chat messages found on the screen" | The screenshot had no chat text. Open the chat first. |
 | A name is shown as a message, or a message as a name | Add the member names to `MEMBERS` in the script (section 1, step 4). |
 | Translations missing ("(not translated)") | Check *Translate Text* is inside the repeat and step 5's parameter is **Repeat Results**. |
