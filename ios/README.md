@@ -39,11 +39,11 @@ If you already made the Back Tap shortcut (*Take Screenshot → Extract Text fro
 |---|---|---|
 | 1 | **Take Screenshot** | — |
 | 2 | **Extract Text from Image** | Input: **Screenshot** |
-| 3 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: **Text from Image** · *Run In App* off |
+| 3 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: the text from step 2 (shown as **Text from Image** or **Extracted Text**, with the same icon as step 2) — **not** *Repeat Item* · *Run In App* off |
 | 4 | **Repeat with Each** | Repeat with each item in **Script Output** |
 | 4a | ↳ **Translate Text** (inside the repeat) | Translate **Repeat Item** from **Korean** to **English** |
 | 5 | **Run Script** (Scriptable), after *End Repeat* | Script: **Kakao Translate** · Parameter: **Repeat Results** · *Run In App* off |
-| 6 | **Quick Look** | Input: **Script Output** (from step 5) |
+| 6 | **Quick Look** | Input: **Script Output** from step 5 (the `{ }` Scriptable icon — not the Translate icon) |
 
 How to do the basic moves in the editor:
 - **Add an action:** use the action search field and type the action's name; tap the result to add it to the end. Scriptable's action is **Run Script**.
@@ -66,6 +66,7 @@ Open the group chat in KakaoTalk and double-tap the back of the phone. Read the 
 | What you see | Fix |
 |---|---|
 | Nothing appears after double-tapping | Run the shortcut once from the Shortcuts app and allow everything (section 2, "Then", step 1). Turn on Settings → Notifications → **Shortcuts** so errors show. If still nothing, replace **Quick Look** with **Show Result** (input **Script Output**). |
+| "Script completed without presenting UI…" in red above the first Run Script, or "The script received no text" | The first Run Script's input is wrong (often *Repeat Item*, which is empty outside the repeat). Tap it and choose the text from **Extract Text**. Also re-copy the latest script. |
 | "No chat messages found on the screen" | The screenshot had no chat text. Open the chat first. |
 | A name is shown as a message, or a message as a name | Add the member names to `MEMBERS` in the script (section 1, step 4). |
 | Translations missing ("(not translated)") | Check *Translate Text* is inside the repeat and step 5's parameter is **Repeat Results**. |

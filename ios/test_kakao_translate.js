@@ -269,3 +269,33 @@ test("screen text is never mistaken for step 2", () => {
   kt.handle("김민준\n언제가면되려나?\n10:47 AM", store);  // step 1 expecting 1 translation, then abandoned
   assert.ok(Array.isArray(kt.handle(SCREEN_1, store).output));
 });
+
+// ── Shortcut-facing wrapper (what Scriptable actually returns) ────────────
+
+test("first Run Script given no text: explains the fix instead of failing", () => {
+  const store = memoryStore();
+  const step1 = kt.runStep(null, store);            // e.g. input set to Repeat Item outside the repeat
+  assert.deepStrictEqual(step1, [kt.NOTHING]);      // never an empty list
+  const out = kt.runStep("Confirm", store);         // Apple Translate's rendering of the placeholder
+  assert.match(out, /received no text/);
+  assert.match(out, /not Repeat Item/);
+});
+
+test("screen with only English: placeholder goes through Translate and is ignored", () => {
+  const store = memoryStore();
+  const step1 = kt.runStep("Alex\nsee you at the booth\n10:49 AM", store);
+  assert.deepStrictEqual(step1, [kt.NOTHING]);
+  assert.strictEqual(kt.runStep("Confirm", store), "[Alex]\nsee you at the booth");
+});
+
+test("normal screen through the wrapper", () => {
+  const store = memoryStore();
+  const step1 = kt.runStep("김민준\n언제가면되려나?\n10:47 AM", store);
+  assert.deepStrictEqual(step1, ["언제가면되려나?"]);
+  assert.strictEqual(kt.runStep("When should I go?", store), "[김민준]\n언제가면되려나?\n→ When should I go?");
+});
+
+test("an unexpected error becomes a readable message", () => {
+  const broken = { load: () => { throw new Error("disk full"); }, save: () => {} };
+  assert.match(kt.runStep("anything", broken), /hit a problem: disk full/);
+});

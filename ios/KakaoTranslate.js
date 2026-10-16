@@ -280,7 +280,7 @@ function handle(param, store, now = Date.now()) {
   // a list, or a single short text — right after step 1.
   let translations = markedTranslations(param);
   if (translations === null && awaiting && !parseExport(asText(param)).messages.length) {
-    const shortText = typeof param === "string" && pending.expected === 1 &&
+    const shortText = typeof param === "string" && pending.expected <= 1 &&
       param.split("\n").filter(l => l.trim()).length < 4;
     if (param == null || param === "" || Array.isArray(param) || shortText) translations = asList(param);
   }
@@ -295,6 +295,15 @@ function handle(param, store, now = Date.now()) {
 
   // Step 1: the Shortcut passes screenshot text or an exported chat.
   const raw = asText(param);
+  if (!raw.trim()) {
+    state.pending = {
+      awaiting: true, createdAt: now, expected: 0,
+      error: "The script received no text. In the Shortcut, set the first Run Script's input to the " +
+        "text from Extract Text (not Repeat Item), and check it comes right after Extract Text.",
+    };
+    store.save(state);
+    return { output: [] };
+  }
   const { title, messages } = parseExport(raw);
   if (!messages.length) {
     if (/^[^\n]*\.(txt|zip)\s*$/i.test(raw.trim())) {
@@ -348,6 +357,29 @@ function handle(param, store, now = Date.now()) {
   return { output: fresh.filter(m => SYLLABLE.test(m.text)).map(m => m.text) };
 }
 
+// What the Shortcut gets back. Never an empty list (Scriptable reports that
+// as an error and the Shortcut stops): when there's nothing to translate, a
+// placeholder word goes through Translate instead and is ignored in step 2.
+// Errors become a message shown at the end instead of stopping the Shortcut.
+const NOTHING = "확인";
+
+function runStep(param, store, now = Date.now()) {
+  let output;
+  try {
+    output = handle(param, store, now).output;
+  } catch (e) {
+    const message = `Kakao Translate hit a problem: ${(e && e.message) || e}`;
+    try {
+      const state = store.load();
+      state.pending = { awaiting: true, createdAt: now, expected: 0, error: message };
+      store.save(state);
+    } catch (_) { /* storage itself failed; the message below still shows */ }
+    return message;
+  }
+  if (Array.isArray(output) && output.length === 0) return [NOTHING];
+  return output;
+}
+
 // ── Scriptable glue ───────────────────────────────────────────────────────
 
 if (typeof Script !== "undefined") (async () => {
@@ -366,7 +398,7 @@ if (typeof Script !== "undefined") (async () => {
     let param = args.shortcutParameter;
     const path = typeof param === "string" ? param.trim() : "";
     if (/^\/.*\.txt$/i.test(path) && fm.fileExists(path)) param = fm.readString(path);
-    Script.setShortcutOutput(handle(param, store).output);
+    Script.setShortcutOutput(runStep(param, store));
     Script.complete();
   } else {
     const alert = new Alert();
@@ -383,5 +415,8 @@ if (typeof Script !== "undefined") (async () => {
 })();
 
 if (typeof module !== "undefined") {
-  module.exports = { parseExport, parseLine, parseScreen, looksLikeName, findAfterAnchor, buildDigest, handle, MARK, SEP };
+  module.exports = {
+    parseExport, parseLine, parseScreen, looksLikeName, findAfterAnchor, buildDigest, handle, runStep,
+    MARK, SEP, NOTHING,
+  };
 }
