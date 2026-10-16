@@ -360,3 +360,61 @@ test("Scriptable glue: opening the script in the app shows the menu", async () =
   assert.ok(run.alerted);
   assert.ok(run.completed);
 });
+
+// Modelled on a real dark-mode screen with 24-hour times and a new day; names replaced.
+const SCREEN_NEW_DAY = `01:30
+스터디 그룹 42
+박지훈씨 왜 c52를 점거하셨나요?
+14
+21:39
+1
+박지훈
+ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ
+14
+21:40
+박지훈
+그게.. 보이나..?
+14
+차주 한국인들 휴식용 대형방임다
+14
+월수오후
+14
+21:41
+Friday, October 16, 2026 >
+김민준
+Reply to 박지훈
+지훈 유나 민준 서연 도윤...
+유나 추가요 @최유나(Yuna)
+24
+00:14
+최유나(Yuna)
+감사합니다
+감사합니다~
+24
+00:15
+Enter a message`;
+
+test("screen text: new-day date line, 24-hour times, title with member count", () => {
+  const groups = kt.parseScreen(SCREEN_NEW_DAY);
+  assert.deepStrictEqual(groups.map(g => (g.divider ? ["──", g.divider] : [g.sender, g.text, g.replyTo])), [
+    ["", "박지훈씨 왜 c52를 점거하셨나요?", ""],
+    ["박지훈", "ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ", ""],
+    ["박지훈", "그게.. 보이나..? 차주 한국인들 휴식용 대형방임다 월수오후", ""],
+    ["──", "Friday, October 16, 2026"],
+    ["김민준", "유나 추가요 @최유나(Yuna)", "박지훈"],
+    ["최유나(Yuna)", "감사합니다 감사합니다~", ""],
+  ]);
+});
+
+test("screen text: the date shows as a divider in the results and isn't translated", () => {
+  const { toTranslate, digest } = runScreen(SCREEN_NEW_DAY);
+  assert.ok(!toTranslate.some(t => /October/.test(t)));
+  assert.match(digest, /\n── Friday, October 16, 2026 ──\n/);
+  assert.match(digest, /\[박지훈\]\nㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ\n→ \(laughing\)/);
+  assert.match(digest, /\[김민준\] ↩ replying to 박지훈\n유나 추가요 @최유나\(Yuna\)\n→ EN/);
+});
+
+test("screen text: Korean date lines too", () => {
+  const groups = kt.parseScreen("김민준\n안녕\n10:00\n2026년 10월 16일 금요일 >\n김민준\n좋아요\n00:15");
+  assert.deepStrictEqual(groups.filter(g => g.divider).map(g => g.divider), ["2026년 10월 16일 금요일"]);
+});

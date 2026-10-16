@@ -33,7 +33,7 @@ const DATE_LINE = new RegExp(
     "|(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day,?\\s.*\\d{4}" +
     "|[A-Z][a-z]+\\.? \\d{1,2}, \\d{4}" +
     "|\\d{4}\\.\\s?\\d{1,2}\\.\\s?\\d{1,2}\\.?(\\s[가-힣]+요일)?" +
-  ")[\\s\\-=]*$"
+  ")[\\s\\-=>›〉)]*$"  // KakaoTalk shows "Friday, October 16, 2026 >"
 );
 const SYSTEM = /(님이 들어왔습니다|님이 나갔습니다|님을 초대했습니다|님을 내보냈습니다|joined this chatroom|left this chatroom|invited .+ to)/i;
 
@@ -131,7 +131,8 @@ function screenKind(t) {
   if (SCREEN_COUNT.test(t)) return "count";
   if (!/[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z]/.test(t)) return "noise";  // reactions, symbols, battery %
   if (SCREEN_TIME.test(t)) return "time";
-  if (SCREEN_UI.test(t) || DATE_LINE.test(t) || SYSTEM.test(t)) return "noise";
+  if (DATE_LINE.test(t)) return "date";
+  if (SCREEN_UI.test(t) || SYSTEM.test(t)) return "noise";
   if (REPLY_EN.test(t) || REPLY_KO.test(t)) return "reply";
   return "text";
 }
@@ -153,9 +154,13 @@ function parseScreen(raw) {
   const lines = String(raw).replace(/\r\n?/g, "\n").split("\n").map(s => s.trim()).filter(Boolean);
   let items = lines.map(text => ({ text, kind: screenKind(text) }));
 
-  // Chat title at the top: the first text line, followed by the member count.
+  // Chat title at the top: the first text line, followed by the member count
+  // either on the next line or on the same line ("스터디 그룹 42").
   const first = items.findIndex(i => i.kind === "text");
-  if (first >= 0 && first <= 3 && items[first + 1] && items[first + 1].kind === "count") items[first].kind = "noise";
+  if (first >= 0 && first <= 3 &&
+      ((items[first + 1] && items[first + 1].kind === "count") || /\s\d{1,4}$/.test(items[first].text))) {
+    items[first].kind = "noise";
+  }
   items = items.filter(i => i.kind !== "noise" && i.kind !== "count");
 
   // The line after "Reply to X" is the quoted message, not new text.
@@ -179,6 +184,13 @@ function parseScreen(raw) {
   const start = sender => { cur = { sender, replyTo: "", lines: [] }; groups.push(cur); };
   items.forEach((it, i) => {
     if (it.kind === "time") { afterTime = true; return; }
+    if (it.kind === "date") {
+      // A new day: shown as a divider; messages after it start fresh.
+      groups.push({ divider: it.text.replace(/[\s\-=>›〉)]+$/, "").replace(/^[\s\-=]+/, "") });
+      cur = null;
+      afterTime = true;
+      return;
+    }
     if (it.kind === "quote") return;
     if (isName[i]) { start(it.text); afterTime = false; return; }
     if (it.kind === "reply") {
@@ -190,24 +202,28 @@ function parseScreen(raw) {
     }
     // Message text with no name above it after a timestamp: it's yours, or the
     // same person a minute later — the screen alone can't tell, so mark it "?".
-    if (!cur || afterTime) start(cur ? "?" : "");
+    if (!cur || afterTime) start(cur || groups.length ? "?" : "");
     cur.lines.push(it.text);
     afterTime = false;
   });
   return groups
-    .filter(g => g.lines.length)
-    .map(g => ({ sender: g.sender, replyTo: g.replyTo, text: g.lines.join(" ") }));
+    .filter(g => g.divider || g.lines.length)
+    .map(g => (g.divider ? g : { sender: g.sender, replyTo: g.replyTo, text: g.lines.join(" ") }));
 }
 
 function buildScreenDigest(pending, translations) {
   const { groups } = pending;
   const out = [];
-  if (!groups.length) {
+  if (!groups.some(g => !g.divider)) {
     out.push("No chat messages found on the screen. Open the KakaoTalk chat, then run the Shortcut.");
   }
   let t = 0;
   groups.forEach((g, i) => {
     if (i) out.push("");
+    if (g.divider) {
+      out.push(`── ${g.divider} ──`);
+      return;
+    }
     const who = g.sender === "" ? "[… earlier]" : `[${g.sender}]`;
     out.push(g.replyTo ? `${who} ↩ replying to ${g.replyTo}` : who);
     out.push(g.text);
@@ -316,7 +332,7 @@ function handle(param, store, now = Date.now()) {
       return { output: [] };
     }
     const groups = parseScreen(raw);
-    const toTranslate = groups.filter(g => SYLLABLE.test(g.text)).map(g => g.text);
+    const toTranslate = groups.filter(g => !g.divider && SYLLABLE.test(g.text)).map(g => g.text);
     state.pending = {
       mode: "screen", awaiting: true, createdAt: now, expected: toTranslate.length, groups,
       raw: SHOW_SCREEN_TEXT ? raw : "",

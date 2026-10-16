@@ -17,6 +17,7 @@ valid
 
 - Timestamps, unread counts, the status bar, the chat title, the message box and quoted reply text are left out.
 - A sender's wrapped lines and back-to-back bubbles are joined into one message.
+- A new day appears as a divider, e.g. `── Friday, October 16, 2026 ──`.
 - `[… earlier]` means the sender's name is above the top of the screen. `[?]` means the message came after a timestamp with no name above it — either your own message or the same person a minute later; the screen alone can't tell.
 - It translates what's on screen. To catch up on more, scroll up and double-tap again.
 
@@ -39,17 +40,17 @@ If you already made the Back Tap shortcut (*Take Screenshot → Extract Text fro
 |---|---|---|
 | 1 | **Take Screenshot** | — |
 | 2 | **Extract Text from Image** | Input: **Screenshot** |
-| 3 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: the text from step 2 (shown as **Text from Image** or **Extracted Text**, with the same icon as step 2) — **not** *Repeat Item* · *Run In App* off |
+| 3 | **Run Script** (Scriptable) | Script: **Kakao Translate** · Parameter: the text from step 2 (shown as **Text from Image** or **Extracted Text**, with the same icon as step 2) — **not** *Repeat Item* · *Run In App* off · *Show When Run* off |
 | 4 | **Repeat with Each** | Repeat with each item in **Script Output** |
 | 4a | ↳ **Translate Text** (inside the repeat) | Translate **Repeat Item** (not *Text from Image*) from **Korean** to **English** |
-| 5 | **Run Script** (Scriptable), after *End Repeat* | Script: **Kakao Translate** · Parameter: **Repeat Results** · *Run In App* off |
+| 5 | **Run Script** (Scriptable), after *End Repeat* | Script: **Kakao Translate** · Parameter: **Repeat Results** · *Run In App* off · *Show When Run* off |
 | 6 | **Quick Look** | Input: **Script Output** from step 5 (the `{ }` Scriptable icon — not the Translate icon) |
 
 How to do the basic moves in the editor:
 - **Add an action:** use the action search field and type the action's name; tap the result to add it to the end. Scriptable's action is **Run Script**.
 - **Change a value:** tap the blue word in the action (e.g. *Script*, *Parameter*, a language) and pick from the list. Earlier results — **Text from Image**, **Script Output**, **Repeat Results** — appear in that list.
 - **Move an action:** touch and hold it, then drag. *Translate Text* must sit **between** *Repeat with Each* and *End Repeat*.
-- **Run In App:** on Scriptable's Run Script action this option may be behind a **>** or *Show More*; keep it **off**.
+- **Run In App / Show When Run:** on Scriptable's Run Script action these are behind the **>** arrow; keep both **off** (Show When Run makes Scriptable pop up on every run).
 - If you're editing the old shortcut, delete its old *Translate Text* (the one outside the repeat), and make sure the last action shows **Script Output**, not *Translated Text*.
 
 Then:
@@ -67,6 +68,7 @@ Open the group chat in KakaoTalk and double-tap the back of the phone. Read the 
 |---|---|
 | Nothing appears after double-tapping | Run the shortcut once from the Shortcuts app and allow everything (section 2, "Then", step 1). Turn on Settings → Notifications → **Shortcuts** so errors show. If still nothing, replace **Quick Look** with **Show Result** (input **Script Output**). |
 | "Script completed without presenting UI…" in red above the first Run Script, or "The script received no text" | The first Run Script's input is wrong (often *Repeat Item*, which is empty outside the repeat). Tap it and choose the text from **Extract Text**. Also re-copy the latest script. |
+| A Scriptable pop-up appears each time (twice per run) | Tap the **>** on each Run Script action and turn **Show When Run** off. |
 | "No chat messages found on the screen" | The screenshot had no chat text. Open the chat first. |
 | A name is shown as a message, or a message as a name | Add the member names to `MEMBERS` in the script (section 1, step 4). |
 | Translations missing ("(not translated)") | Check *Translate Text* is inside the repeat and step 5's parameter is **Repeat Results**. |
