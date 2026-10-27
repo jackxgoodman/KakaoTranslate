@@ -497,3 +497,85 @@ test("Scriptable glue: combined layout works when saved files are lost between s
   const step2 = await runInScriptable({ param: combinedStep2(SCREEN_1, translations), files: {} });
   assert.match(step2.output, /\[김민준\]\n언제가면되려나\?\n→ EN\(언제가면되려나\?\)/);
 });
+
+// Modelled on a real screen: photo at the top, given-name-only sender, English
+// messages and names, new day; names replaced.
+const SCREEN_GIVEN_NAME = `20:47
+스터디 그룹 44
+6
+11:59
+1
+3
+박도윤
+공주 일어나셨어요
+6
+12:00
+김민준
+아진짜귀엽다
+6
+12:02
+1
+김지은 Jenny Kim
+아 공주 너무 귀여워ㅠㅠㅠㅠㅠ
+6
+13:29
+1
+Monday, October 26, 2026 >
+재민
+오늘 저녁에 밀라 파크라인 73e 스터디룸
+가는 사람 있나여
+10
+14:50
+정하나
+Reply to 재민
+오늘 저녁에 밀라 파크라인 73e 스터디룸가는...
+I could and I should
+10
+15:15
+Minji Park
+if u guys end up at 73e lmk~
+12
+17:21
+Enter a message`;
+
+test("screen text: a sender shown by given name only (no surname)", () => {
+  const groups = kt.parseScreen(SCREEN_GIVEN_NAME);
+  assert.deepStrictEqual(groups.map(g => (g.divider ? ["──", g.divider] : [g.sender, g.text, g.replyTo])), [
+    ["박도윤", "공주 일어나셨어요", ""],
+    ["김민준", "아진짜귀엽다", ""],
+    ["김지은 Jenny Kim", "아 공주 너무 귀여워ㅠㅠㅠㅠㅠ", ""],
+    ["──", "Monday, October 26, 2026"],
+    ["재민", "오늘 저녁에 밀라 파크라인 73e 스터디룸 가는 사람 있나여", ""],
+    ["정하나", "I could and I should", "재민"],
+    ["Minji Park", "if u guys end up at 73e lmk~", ""],
+  ]);
+});
+
+test("combined step 2: the marker doesn't have to be on its own line", () => {
+  const step1 = kt.runStep(SCREEN_GIVEN_NAME, memoryStore());
+  const tr = step1.map(t => `EN(${t})`);
+  for (const glue of [
+    `${SCREEN_GIVEN_NAME} KT-TRANSLATIONS ${tr.join("\n")}`,  // all run together
+    `${SCREEN_GIVEN_NAME}\nkt‑translations\n${tr.join("\n")}`,  // lower case, non-breaking hyphen
+    `${SCREEN_GIVEN_NAME}\nKT - TRANSLATIONS\n\n${tr.join("\n")}`,
+  ]) {
+    const out = kt.runStep(glue, memoryStore());
+    assert.match(out, /\[재민\]\n오늘 저녁에 밀라 파크라인 73e 스터디룸 가는 사람 있나여\n→ EN\(/);
+    assert.doesNotMatch(out, /may not line up/);
+  }
+});
+
+test("last Run Script given the screen text again: says which input to fix", () => {
+  const store = memoryStore();
+  const step1 = kt.runStep(SCREEN_GIVEN_NAME, store, 1000);
+  assert.ok(Array.isArray(step1));
+  const out = kt.runStep(SCREEN_GIVEN_NAME, store, 5000);  // the same screen text seconds later
+  assert.match(out, /received the screen text instead of the translations/);
+});
+
+test("running again on the same screen after a finished run works normally", () => {
+  const store = memoryStore();
+  const step1 = kt.runStep(SCREEN_GIVEN_NAME, store, 1000);
+  kt.runStep(combinedStep2(SCREEN_GIVEN_NAME, step1.map(t => `EN(${t})`)), store, 3000);
+  assert.ok(Array.isArray(kt.runStep(SCREEN_GIVEN_NAME, store, 10000)));
+});

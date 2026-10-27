@@ -137,6 +137,13 @@ function screenKind(t) {
   return "text";
 }
 
+// Given names used on their own ("재영"): only trusted where a name always
+// sits — at the top, or right after a timestamp or date line.
+const GIVEN_NAME_END = /[다요죠네까지야어아워해래데니자게군도고서면는은를을에로와과랑만뿐함음임듯요]$/;
+function looksLikeGivenName(t) {
+  return /^[가-힣]{2,3}$/.test(t) && !KO_NOT_NAMES.has(t) && !GIVEN_NAME_END.test(t);
+}
+
 function looksLikeName(t) {
   if (MEMBERS.includes(t)) return true;
   if (t.length > 24 || /[.!?~,…]$/.test(t)) return false;
@@ -174,7 +181,9 @@ function parseScreen(raw) {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
     const next = items[i + 1];
-    isName[i] = it.kind === "text" && looksLikeName(it.text) && !!next &&
+    const prev = items[i - 1];
+    const atNameSpot = !prev || prev.kind === "time" || prev.kind === "date";
+    isName[i] = it.kind === "text" && (looksLikeName(it.text) || (atNameSpot && looksLikeGivenName(it.text))) && !!next &&
       (next.kind === "reply" || (next.kind === "text" && !isName[i + 1]));
   }
 
@@ -292,16 +301,26 @@ function markedTranslations(param) {
 //     KT-TRANSLATIONS
 //     <Repeat Results>
 // so step 2 can rebuild everything without relying on anything saved by step 1.
+const MARK_ANYWHERE = /KT\s*[-‐‑‒–—_]?\s*TRANSLATIONS/i;
+
 function splitCombined(param) {
   if (param == null) return null;
-  const lines = asText(param).replace(/\r\n?/g, "\n").split("\n");
-  const i = lines.findIndex(l => l.trim() === MARK);
-  if (i < 0) return null;
-  if (lines.slice(i + 1).join("\n").trim().startsWith(SEP)) return null;  // older "KT-TRANSLATIONS@@@…" layout
+  const text = asText(param).replace(/\r\n?/g, "\n");
+  const m = text.match(MARK_ANYWHERE);
+  if (!m) return null;
+  const after = text.slice(m.index + m[0].length);
+  if (after.trim().startsWith(SEP)) return null;  // older "KT-TRANSLATIONS@@@…" layout
   return {
-    source: lines.slice(0, i).join("\n"),
-    translations: lines.slice(i + 1).map(l => l.trim()).filter(Boolean),
+    source: text.slice(0, m.index),
+    translations: after.split("\n").map(l => l.trim()).filter(Boolean),
   };
+}
+
+// Small stable fingerprint of the screen text, to recognise the same screen arriving twice.
+function fingerprint(text) {
+  let h = 2166136261;
+  for (const ch of String(text).replace(/\s+/g, " ").trim()) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
+  return h.toString(16);
 }
 
 // Older layout (step 2 gets only Repeat Results): is this step 1's input?
@@ -330,6 +349,10 @@ function savePending(state, store, pending, now) {
   store.save(state);
 }
 
+const SAME_SCREEN_MS = 60 * 1000;
+const WRONG_LAST_INPUT = "The last Run Script received the screen text instead of the translations. " +
+  "Set its input to the Text action just above it (the one with Text from Image, KT-TRANSLATIONS and " +
+  "Repeat Results), not to Text from Image.";
 const LOST_TRACK = "Kakao Translate lost track of this run. Please run it again — and to stop this " +
   "happening, update the Shortcut so the last Run Script gets the screen text too (see the guide, step 5).";
 const NO_TEXT = "The script received no text. In the Shortcut, set the first Run Script's input to the " +
@@ -412,7 +435,8 @@ function handle(param, store, now = Date.now()) {
   const combined = splitCombined(param);
   if (combined) {
     const { pending } = prepare(combined.source, state, now);
-    state.pendings = pendings;
+    const fp = fingerprint(combined.source);
+    state.pendings = pendings.filter(p => p.fingerprint !== fp);
     return { output: finish(state, store, pending, combined.translations) };
   }
 
@@ -436,7 +460,17 @@ function handle(param, store, now = Date.now()) {
   }
 
   // Step 1: the Shortcut passes screenshot text or an exported chat.
-  const { pending, toTranslate } = prepare(asText(param), state, now);
+  const raw = asText(param);
+  const fp = fingerprint(raw);
+  if (raw.trim() && pendings.some(p => p.fingerprint === fp && now - p.createdAt < SAME_SCREEN_MS)) {
+    // The same screen text again seconds later, with no translations: almost
+    // certainly the last Run Script is set to the screen text instead of the Text action.
+    state.pendings = pendings.filter(p => p.fingerprint !== fp);
+    store.save(state);
+    return { output: WRONG_LAST_INPUT };
+  }
+  const { pending, toTranslate } = prepare(raw, state, now);
+  pending.fingerprint = fp;
   savePending(state, store, pending, now);
   return { output: toTranslate };
 }
