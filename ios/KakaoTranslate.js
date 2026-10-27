@@ -19,7 +19,7 @@ const SHOW_SCREEN_TEXT = false;
 const FIRST_RUN_COUNT = 30;  // exports: messages shown the first time you use a chat
 // ──────────────────────────────────────────────────────────────────────────
 
-const VERSION = "2026-10-27";  // shown when you open the script in Scriptable
+const VERSION = "2026-10-27b";  // shown when you open the script in Scriptable
 const MARK = "KT-TRANSLATIONS";
 const SEP = "@@@";
 const ANCHOR_LEN = 5;
@@ -311,10 +311,25 @@ function splitCombined(param) {
   if (!m) return null;
   const after = text.slice(m.index + m[0].length);
   if (after.trim().startsWith(SEP)) return null;  // older "KT-TRANSLATIONS@@@…" layout
-  return {
-    source: text.slice(0, m.index),
-    translations: after.split("\n").map(l => l.trim()).filter(Boolean),
-  };
+  return { source: text.slice(0, m.index), translations: parseTranslationList(after) };
+}
+
+// Repeat Results inside a Text action arrives either one per line, or (on
+// recent iOS) as a bracketed list on one line: ["One","Two"].
+function parseTranslationList(text) {
+  const t = text.trim();
+  if (t.startsWith("[") && t.endsWith("]")) {
+    try {
+      const list = JSON.parse(t);
+      if (Array.isArray(list)) return list.map(x => String(x).trim()).filter(Boolean);
+    } catch (_) { /* not strict JSON — fall through to the lenient reading */ }
+    const inner = t.slice(1, -1).trim().replace(/^"/, "").replace(/"$/, "");
+    return inner
+      .split(/"\s*,?\s*"/)  // item boundaries: "," or "" (Shortcuts sometimes drops the comma)
+      .map(x => x.replace(/\\"/g, '"').replace(/\\n/g, " ").trim())
+      .filter(Boolean);
+  }
+  return t.split("\n").map(l => l.trim()).filter(Boolean);
 }
 
 // Small stable fingerprint of the screen text, to recognise the same screen arriving twice.

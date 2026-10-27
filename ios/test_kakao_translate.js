@@ -579,3 +579,31 @@ test("running again on the same screen after a finished run works normally", () 
   kt.runStep(combinedStep2(SCREEN_GIVEN_NAME, step1.map(t => `EN(${t})`)), store, 3000);
   assert.ok(Array.isArray(kt.runStep(SCREEN_GIVEN_NAME, store, 10000)));
 });
+
+// ── Repeat Results inside a Text action, as recent iOS writes it ──────────
+
+test("translations written as a bracketed list on one line (exactly as seen on iOS)", () => {
+  const step1 = kt.runStep(SCREEN_GIVEN_NAME, memoryStore());
+  assert.strictEqual(step1.length, 4);
+  // Copied from a real result, including the missing comma between items 3 and 4.
+  const list = '["The princess woke up","Oh, it\'s so cute","Oh, the princess is so cute,""Is there anyone going to the Mila Parkline 73e study room tonight"]';
+  const out = kt.runStep(`${SCREEN_GIVEN_NAME}\nKT-TRANSLATIONS\n${list}`, memoryStore());
+  assert.match(out, /\[박도윤\]\n공주 일어나셨어요\n→ The princess woke up\n/);
+  assert.match(out, /\[김민준\]\n아진짜귀엽다\n→ Oh, it's so cute\n/);
+  assert.match(out, /\[김지은 Jenny Kim\]\n아 공주 너무 귀여워ㅠㅠㅠㅠㅠ\n→ Oh, the princess is so cute,\n/);
+  assert.match(out, /\[재민\]\n.*있나여\n→ Is there anyone going to the Mila Parkline 73e study room tonight\n/);
+  assert.doesNotMatch(out, /not translated|may not line up/);
+});
+
+test("bracketed list that is valid JSON, with quotes inside a translation", () => {
+  const screen = "김민준\n언제가면되려나?\n10:47\n이서연\n좋아요\n10:48";
+  const list = JSON.stringify(['When should I go? "soon"', "Good"]);
+  const out = kt.runStep(`${screen}\nKT-TRANSLATIONS\n${list}`, memoryStore());
+  assert.match(out, /→ When should I go\? "soon"\n/);
+  assert.match(out, /→ Good$/);
+});
+
+test("a single translation written as a bracketed list", () => {
+  const out = kt.runStep('김민준\n언제가면되려나?\n10:47\nKT-TRANSLATIONS\n["When should I go?"]', memoryStore());
+  assert.strictEqual(out, "[김민준]\n언제가면되려나?\n→ When should I go?");
+});
