@@ -68,7 +68,7 @@ test("first run, then only new messages, then nothing new", () => {
   const store = memoryStore();
 
   const first = runShortcut(store, KOREAN_EXPORT);
-  assert.deepStrictEqual(first.toTranslate, ["언제가면되려나?", "LA를 안가봐서 못해주겠습니다\n두 번째 줄입니다"]);
+  assert.deepStrictEqual(first.toTranslate, ["언제가면되려나?", "LA를 안가봐서 못해주겠습니다 두 번째 줄입니다"]);
   assert.match(first.digest, /^스터디 그룹 — 4 new messages/);
   assert.match(first.digest, /First time for this chat/);
   assert.match(first.digest, /\[김민준\] 2026\. 10\. 14\. 오후 3:10\n언제가면되려나\?\n→ EN\(언제가면되려나\?\)/);
@@ -451,4 +451,49 @@ test("a step 2 with nothing to match shows a message, not the placeholder", () =
   const out = kt.runStep("Confirm", memoryStore());
   assert.strictEqual(typeof out, "string");
   assert.match(out, /lost track/);
+});
+
+// ── Current layout: step 2 gets the screen text and the translations together ─
+
+function combinedStep2(screenText, translations) {
+  return `${screenText}\n${kt.MARK}\n${translations.join("\n")}`;
+}
+
+test("combined step 2 works even if nothing saved by step 1 is visible", () => {
+  const step1 = kt.runStep(SCREEN_1, memoryStore());
+  const translations = step1.map(t => `EN(${t})`);
+  const out = kt.runStep(combinedStep2(SCREEN_1, translations), memoryStore());  // a different, empty store
+  assert.match(out, /^\[… earlier\]\n찬성\n→ EN\(찬성\)/);
+  assert.match(out, /\[Y\]\n고마워 미리\n→ EN\(고마워 미리\)/);
+  assert.match(out, /\[Alex\] ↩ replying to 이서연\nEvery day is national galbi day for me$/);
+});
+
+test("combined step 2 with nothing to translate ignores the placeholder", () => {
+  const screen = "3:47\nAlex\nsee you at the booth\n10:49 AM";
+  assert.deepStrictEqual(kt.runStep(screen, memoryStore()), [kt.NOTHING]);
+  assert.strictEqual(kt.runStep(combinedStep2(screen, ["Confirm"]), memoryStore()), "[Alex]\nsee you at the booth");
+});
+
+test("combined step 2 with the new-day screen", () => {
+  const step1 = kt.runStep(SCREEN_NEW_DAY, memoryStore());
+  const out = kt.runStep(combinedStep2(SCREEN_NEW_DAY, step1.map(t => `EN(${t})`)), memoryStore());
+  assert.match(out, /── Friday, October 16, 2026 ──/);
+  assert.match(out, /\[최유나\(Yuna\)\]\n감사합니다 감사합니다~\n→ EN\(감사합니다 감사합니다~\)/);
+});
+
+test("combined step 2 says so if the number of translations is off", () => {
+  const out = kt.runStep(combinedStep2(SCREEN_1, ["only one"]), memoryStore());
+  assert.match(out, /may not line up/);
+});
+
+test("combined step 2 with an empty first input explains the fix", () => {
+  const out = kt.runStep(combinedStep2("", ["Confirm"]), memoryStore());
+  assert.match(out, /received no text/);
+});
+
+test("Scriptable glue: combined layout works when saved files are lost between steps", async () => {
+  const step1 = await runInScriptable({ param: SCREEN_1, files: {} });
+  const translations = Array.from(step1.output).map(t => `EN(${t})`);
+  const step2 = await runInScriptable({ param: combinedStep2(SCREEN_1, translations), files: {} });
+  assert.match(step2.output, /\[김민준\]\n언제가면되려나\?\n→ EN\(언제가면되려나\?\)/);
 });

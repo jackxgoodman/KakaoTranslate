@@ -287,20 +287,36 @@ function markedTranslations(param) {
   return rest.trim() ? rest.split(SEP).map(t => t.trim()) : [];
 }
 
-// Is this what the Shortcut passes in step 1 (screen text, an export, or
-// nothing at all) rather than step 2's translations? Decided from the
-// content alone, so a leftover or simultaneous run can't confuse the steps:
-// screen text always has bare time lines (status bar, timestamps) and many
-// lines; translations never do.
+// Current Shortcut layout for step 2: one Text action containing
+//     <the text from Extract Text>
+//     KT-TRANSLATIONS
+//     <Repeat Results>
+// so step 2 can rebuild everything without relying on anything saved by step 1.
+function splitCombined(param) {
+  if (param == null) return null;
+  const lines = asText(param).replace(/\r\n?/g, "\n").split("\n");
+  const i = lines.findIndex(l => l.trim() === MARK);
+  if (i < 0) return null;
+  if (lines.slice(i + 1).join("\n").trim().startsWith(SEP)) return null;  // older "KT-TRANSLATIONS@@@…" layout
+  return {
+    source: lines.slice(0, i).join("\n"),
+    translations: lines.slice(i + 1).map(l => l.trim()).filter(Boolean),
+  };
+}
+
+// Older layout (step 2 gets only Repeat Results): is this step 1's input?
+// Step 2 sends a list, nothing, or one or two short lines; screen text has
+// bare time lines and several lines.
 function isStepOneInput(param) {
   if (markedTranslations(param) !== null) return false;
   const items = Array.isArray(param) ? param.map(String) : asText(param).split("\n");
   const lines = items.map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return false;
   if (parseExport(items.join("\n")).messages.length) return true;
   if (lines.some(l => SCREEN_TIME.test(l))) return true;
-  if (!Array.isArray(param) && lines.length >= 8) return true;
-  if (lines.length === 1 && /\.(txt|zip)$/i.test(lines[0])) return true;
-  return false;
+  if (lines.length === 1 && /\.(txt|zip)$/i.test(lines[0])) return true;  // a file name instead of the file
+  if (Array.isArray(param)) return false;
+  return lines.length > 2;
 }
 
 function livePendings(state, now) {
@@ -314,60 +330,40 @@ function savePending(state, store, pending, now) {
   store.save(state);
 }
 
-const LOST_TRACK = "Kakao Translate lost track of this run — it may have been started twice at once. Please run it again.";
+const LOST_TRACK = "Kakao Translate lost track of this run. Please run it again — and to stop this " +
+  "happening, update the Shortcut so the last Run Script gets the screen text too (see the guide, step 5).";
 const NO_TEXT = "The script received no text. In the Shortcut, set the first Run Script's input to the " +
   "text from Extract Text (not Repeat Item), and check it comes right after Extract Text.";
 
-function handle(param, store, now = Date.now()) {
-  const state = store.load();
-  state.chats = state.chats || {};
-  const raw = asText(param);
+const forTranslate = text => text.replace(/\s*\n\s*/g, " ");
 
-  // Step 2: the Shortcut passes back the translations.
-  if (!isStepOneInput(param)) {
-    const translations = markedTranslations(param) || asList(param);
-    const pendings = livePendings(state, now);
-    const fits = p => (p.expected || 0) === translations.length || ((p.expected || 0) === 0 && translations.length <= 1);
-    const pending = pendings.slice().reverse().find(fits);
-    if (!pending) {
-      state.pendings = pendings;
-      store.save(state);
-      if (!raw.trim()) {
-        // Nothing passed and no run in progress: most likely the first Run Script's input is wrong.
-        savePending(state, store, { awaiting: true, createdAt: now, expected: 0, error: NO_TEXT }, now);
-        return { output: [] };
-      }
-      return { output: LOST_TRACK };
-    }
-    const output = buildDigest(pending, translations);
-    if (!pending.error && pending.mode !== "screen") state.chats[pending.title] = { anchor: pending.anchor };
-    state.pendings = pendings.filter(p => p !== pending);
-    store.save(state);
-    return { output };
-  }
-
-  // Step 1: the Shortcut passes screenshot text or an exported chat.
+// Work out the messages to show and the Korean texts to translate. Pure: the
+// same input always gives the same result, so step 2 can simply redo it.
+function prepare(raw, state, now) {
   const { title, messages } = parseExport(raw);
   if (!messages.length) {
+    if (!raw.trim()) return { pending: { awaiting: true, createdAt: now, expected: 0, error: NO_TEXT }, toTranslate: [] };
     if (/^[^\n]*\.(txt|zip)\s*$/i.test(raw.trim())) {
-      savePending(state, store, {
-        awaiting: true, createdAt: now, expected: 0,
-        error: `The Shortcut passed the file name ("${raw.trim()}") instead of its contents. ` +
-          "Add a Text action containing Shortcut Input before the first Run Script, and pass that Text instead.",
-      }, now);
-      return { output: [] };
+      return {
+        pending: {
+          awaiting: true, createdAt: now, expected: 0,
+          error: `The Shortcut passed the file name ("${raw.trim()}") instead of its contents. ` +
+            "Add a Text action containing Shortcut Input before the first Run Script, and pass that Text instead.",
+        },
+        toTranslate: [],
+      };
     }
     const groups = parseScreen(raw);
-    const toTranslate = groups.filter(g => !g.divider && SYLLABLE.test(g.text)).map(g => g.text);
-    savePending(state, store, {
-      mode: "screen", awaiting: true, createdAt: now, expected: toTranslate.length, groups,
-      raw: SHOW_SCREEN_TEXT ? raw : "",
-    }, now);
-    return { output: toTranslate };
+    const toTranslate = groups.filter(g => !g.divider && SYLLABLE.test(g.text)).map(g => forTranslate(g.text));
+    return {
+      pending: { mode: "screen", awaiting: true, createdAt: now, expected: toTranslate.length, groups,
+        raw: SHOW_SCREEN_TEXT ? raw : "" },
+      toTranslate,
+    };
   }
 
-  // Find where you left off: this chat's saved position, or any saved position
-  // that matches (in case the export's first line changed).
+  // Exports: find where you left off — this chat's saved position, or any
+  // saved position that matches (in case the export's first line changed).
   let chatKey = title;
   let start = findAfterAnchor(state.chats[title] && state.chats[title].anchor, messages);
   if (start < 0) {
@@ -385,16 +381,64 @@ function handle(param, store, now = Date.now()) {
       : `(First time for this chat — showing the last ${messages.length - start}.)`;
   }
   const fresh = messages.slice(start);
-  savePending(state, store, {
-    awaiting: true,
-    createdAt: now,
-    expected: fresh.filter(m => SYLLABLE.test(m.text)).length,
-    title: chatKey,
-    note,
-    messages: fresh,
-    anchor: messages.slice(-ANCHOR_LEN).map(keyOf),
-  }, now);
-  return { output: fresh.filter(m => SYLLABLE.test(m.text)).map(m => m.text) };
+  const toTranslate = fresh.filter(m => SYLLABLE.test(m.text)).map(m => forTranslate(m.text));
+  return {
+    pending: {
+      awaiting: true, createdAt: now, expected: toTranslate.length, title: chatKey, note,
+      messages: fresh, anchor: messages.slice(-ANCHOR_LEN).map(keyOf),
+    },
+    toTranslate,
+  };
+}
+
+function finish(state, store, pending, translations) {
+  const expected = pending.expected || 0;
+  const used = expected === 0 ? [] : translations;  // with nothing to translate, the placeholder's translation is ignored
+  let output = buildDigest(pending, used);
+  if (expected && used.length !== expected && !pending.error) {
+    output += "\n\n(Some translations may not line up with their messages — try again if they look wrong.)";
+  }
+  if (!pending.error && pending.mode !== "screen") state.chats[pending.title] = { anchor: pending.anchor };
+  store.save(state);
+  return output;
+}
+
+function handle(param, store, now = Date.now()) {
+  const state = store.load();
+  state.chats = state.chats || {};
+  const pendings = livePendings(state, now);
+
+  // Step 2, current layout: screen text + translations together. No saved state needed.
+  const combined = splitCombined(param);
+  if (combined) {
+    const { pending } = prepare(combined.source, state, now);
+    state.pendings = pendings;
+    return { output: finish(state, store, pending, combined.translations) };
+  }
+
+  // Step 2, older layout: only the translations; match them to step 1's saved run.
+  if (!isStepOneInput(param)) {
+    const translations = markedTranslations(param) || asList(param);
+    const fits = p => (p.expected || 0) === translations.length || ((p.expected || 0) === 0 && translations.length <= 1);
+    const pending = pendings.slice().reverse().find(fits);
+    if (!pending) {
+      state.pendings = pendings;
+      store.save(state);
+      if (!asText(param).trim()) {
+        // Nothing passed and no run in progress: most likely the first Run Script's input is wrong.
+        savePending(state, store, { awaiting: true, createdAt: now, expected: 0, error: NO_TEXT }, now);
+        return { output: [] };
+      }
+      return { output: LOST_TRACK };
+    }
+    state.pendings = pendings.filter(p => p !== pending);
+    return { output: finish(state, store, pending, translations) };
+  }
+
+  // Step 1: the Shortcut passes screenshot text or an exported chat.
+  const { pending, toTranslate } = prepare(asText(param), state, now);
+  savePending(state, store, pending, now);
+  return { output: toTranslate };
 }
 
 // What the Shortcut gets back. Never an empty list (Scriptable reports that
