@@ -19,6 +19,7 @@ const SHOW_SCREEN_TEXT = false;
 const FIRST_RUN_COUNT = 30;  // exports: messages shown the first time you use a chat
 // ──────────────────────────────────────────────────────────────────────────
 
+const VERSION = "2026-10-27";  // shown when you open the script in Scriptable
 const MARK = "KT-TRANSLATIONS";
 const SEP = "@@@";
 const ANCHOR_LEN = 5;
@@ -528,7 +529,7 @@ if (typeof Script !== "undefined") (async () => {
     Script.complete();
   } else {
     const alert = new Alert();
-    alert.title = "Kakao Translate";
+    alert.title = `Kakao Translate (version ${VERSION})`;
     alert.message = "Open a KakaoTalk chat and double-tap the back of your iPhone (or run the " +
       "\"Kakao Translate\" Shortcut).\n\nReset forgets saved positions for exported chats.";
     alert.addDestructiveAction("Reset");
